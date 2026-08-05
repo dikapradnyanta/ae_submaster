@@ -101,9 +101,8 @@ var SrtParser = (function () {
             return result;
         }
 
-        // ── Open and read file ───────────────────────────────────────────────
+        // ── Open and read file (with multi-encoding fallback) ────────────────
         fileObj.encoding = "UTF-8";
-
         if (!fileObj.open("r")) {
             result.error = "Cannot open file (may be locked by another process): " + fileObj.fsName;
             Logger.error("srtParser", "Failed to open SRT file", { path: fileObj.fsName });
@@ -112,6 +111,29 @@ var SrtParser = (function () {
 
         var rawContent = fileObj.read();
         fileObj.close();
+
+        // Fallback for UTF-16 encoded files (common from Premiere / Windows Notepad)
+        if (!rawContent || rawContent.length === 0 || rawContent.indexOf("\u0000") !== -1) {
+            fileObj.encoding = "UTF-16";
+            if (fileObj.open("r")) {
+                rawContent = fileObj.read();
+                fileObj.close();
+            }
+        }
+
+        // Fallback for BINARY / ANSI encoded files
+        if (!rawContent || rawContent.length === 0 || rawContent.indexOf("\u0000") !== -1) {
+            fileObj.encoding = "BINARY";
+            if (fileObj.open("r")) {
+                rawContent = fileObj.read();
+                fileObj.close();
+            }
+        }
+
+        // Clean any remaining null bytes
+        if (rawContent) {
+            rawContent = rawContent.replace(/\u0000/g, "");
+        }
 
         if (!rawContent || rawContent.length === 0) {
             result.error = "File is empty: " + fileObj.fsName;

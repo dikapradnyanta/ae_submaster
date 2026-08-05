@@ -879,9 +879,9 @@ function buildPanel(thisObj) {
             var chosen = File.openDialog("Select SRT File", "SRT Files:*.srt,All Files:*.*");
             if (chosen && chosen.exists) {
                 state.srtFilePath = chosen.fsName;
-                txtSrtPath.text   = chosen.name;
+                txtSrtPath.text   = decodeURIComponent(chosen.name);
                 updateButtonState();
-                log("ℹ SRT file selected: " + chosen.name);
+                log("[INFO] SRT file selected: " + decodeURIComponent(chosen.name));
             }
         } catch (e) {
             log("⚠ Failed to open file picker: " + e.toString());
