@@ -41,23 +41,22 @@ var PresetIO = (function () {
     function exportTemplateAsPreset(layer, filePath) {
         if (!layer) {
             Logger.error("presetIO", "exportTemplateAsPreset: layer null");
-            return { success: false, error: "Layer tidak valid." };
+            return { success: false, error: "Invalid layer." };
         }
 
         if (!isTextLayer(layer)) {
             Logger.error("presetIO", "exportTemplateAsPreset: not a text layer");
-            return { success: false, error: "Layer bukan text layer — hanya text layer yang bisa diekspor sebagai template." };
+            return { success: false, error: "Layer is not a text layer — only text layers can be exported as templates." };
         }
 
         if (!filePath || filePath.length === 0) {
             Logger.error("presetIO", "exportTemplateAsPreset: filePath empty");
-            return { success: false, error: "Path file tidak boleh kosong." };
+            return { success: false, error: "File path cannot be empty." };
         }
 
         try {
             var presetFile = new File(filePath);
 
-            // Pastikan folder tujuan ada
             var parentFolder = presetFile.parent;
             if (parentFolder && !parentFolder.exists) {
                 parentFolder.create();
@@ -67,46 +66,43 @@ var PresetIO = (function () {
 
             if (!presetFile.exists) {
                 Logger.error("presetIO", "saveAsAnimationPreset executed but file does not exist", { path: filePath });
-                return { success: false, error: "File .ffx gagal dibuat (saveAsAnimationPreset tidak menghasilkan file)." };
+                return { success: false, error: ".ffx file creation failed (saveAsAnimationPreset produced no file)." };
             }
 
             Logger.info("presetIO", "Export preset succeeded", { path: filePath });
             return { success: true };
         } catch (e) {
             Logger.error("presetIO", "Export preset exception", e);
-            return { success: false, error: "Export preset gagal: " + e.toString() };
+            return { success: false, error: "Export preset failed: " + e.toString() };
         }
     }
 
     function importTemplateFromPreset(filePath, targetComp) {
         if (!filePath || filePath.length === 0) {
             Logger.error("presetIO", "importTemplateFromPreset: filePath empty");
-            return { success: false, layer: null, error: "Path file .ffx tidak boleh kosong." };
+            return { success: false, layer: null, error: ".ffx file path cannot be empty." };
         }
 
         if (!targetComp) {
             Logger.error("presetIO", "importTemplateFromPreset: targetComp null");
-            return { success: false, layer: null, error: "Composition tujuan tidak valid." };
+            return { success: false, layer: null, error: "Target composition is invalid." };
         }
 
         var presetFile = new File(filePath);
         if (!presetFile.exists) {
             Logger.error("presetIO", "Preset file not found", { path: filePath });
-            return { success: false, layer: null, error: "File .ffx tidak ditemukan: " + filePath };
+            return { success: false, layer: null, error: ".ffx file not found: " + filePath };
         }
 
         try {
-            // Buat text layer baru — jadi layer teks placeholder
             var newLayer = targetComp.layers.addText("Template");
 
-            // Nama layer menunjukkan ini hasil load dari preset
             try {
                 var fileName = presetFile.name;
                 var displayName = fileName.replace(/\.ffx$/i, "");
                 newLayer.name = "[Template] " + displayName;
             } catch (ignore) {}
 
-            // Apply preset ke layer baru
             try {
                 newLayer.applyPreset(presetFile);
             } catch (e) {
@@ -115,8 +111,8 @@ var PresetIO = (function () {
                 return {
                     success: false,
                     layer: null,
-                    error: "Gagal menerapkan preset ke layer baru: " + e.toString() +
-                           "\nPastikan file .ffx valid dan kompatibel dengan versi AE ini."
+                    error: "Failed to apply preset to new layer: " + e.toString() +
+                           "\nEnsure .ffx file is valid and compatible with this After Effects version."
                 };
             }
 
@@ -124,7 +120,7 @@ var PresetIO = (function () {
             return { success: true, layer: newLayer };
         } catch (e) {
             Logger.error("presetIO", "Import preset exception", e);
-            return { success: false, layer: null, error: "Import template gagal: " + e.toString() };
+            return { success: false, layer: null, error: "Import template failed: " + e.toString() };
         }
     }
 

@@ -46,7 +46,7 @@ var SrtWriter = (function () {
             var fileObj = (fileTarget instanceof File) ? fileTarget : new File(fileTarget);
             fileObj.encoding = "UTF-8";
             if (!fileObj.open("w")) {
-                result.error = "Gagal membuka file untuk penulisan: " + fileObj.fsName;
+                result.error = "Failed to open file for writing: " + fileObj.fsName;
                 return result;
             }
 
@@ -55,7 +55,7 @@ var SrtWriter = (function () {
             fileObj.close();
             result.success = true;
         } catch (e) {
-            result.error = "Error saat menyimpan SRT: " + e.toString();
+            result.error = "Error saving SRT: " + e.toString();
         }
         return result;
     }

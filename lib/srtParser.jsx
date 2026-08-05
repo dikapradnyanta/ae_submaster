@@ -86,27 +86,27 @@ var SrtParser = (function () {
             error:    ""
         };
 
-        // ── Validasi file ────────────────────────────────────────────────────
+        // ── File Validation ──────────────────────────────────────────────────
         if (!fileObj || !(fileObj instanceof File)) {
-            result.error = "Input bukan objek File yang valid.";
-            Logger.error("srtParser", "parseSRT gagal: input bukan File object");
+            result.error = "Input is not a valid File object.";
+            Logger.error("srtParser", "parseSRT failed: input is not a File object");
             return result;
         }
 
-        Logger.debug("srtParser", "parseSRT dimulai", { path: fileObj.fsName });
+        Logger.debug("srtParser", "parseSRT started", { path: fileObj.fsName });
 
         if (!fileObj.exists) {
-            result.error = "File tidak ditemukan: " + fileObj.fsName;
-            Logger.error("srtParser", "File SRT tidak ditemukan", { path: fileObj.fsName });
+            result.error = "File not found: " + fileObj.fsName;
+            Logger.error("srtParser", "SRT file not found", { path: fileObj.fsName });
             return result;
         }
 
-        // ── Buka dan baca file ───────────────────────────────────────────────
+        // ── Open and read file ───────────────────────────────────────────────
         fileObj.encoding = "UTF-8";
 
         if (!fileObj.open("r")) {
-            result.error = "Tidak bisa membuka file (mungkin sedang dipakai proses lain): " + fileObj.fsName;
-            Logger.error("srtParser", "Gagal buka file SRT", { path: fileObj.fsName });
+            result.error = "Cannot open file (may be locked by another process): " + fileObj.fsName;
+            Logger.error("srtParser", "Failed to open SRT file", { path: fileObj.fsName });
             return result;
         }
 
@@ -114,25 +114,22 @@ var SrtParser = (function () {
         fileObj.close();
 
         if (!rawContent || rawContent.length === 0) {
-            result.error = "File kosong: " + fileObj.fsName;
-            Logger.error("srtParser", "File SRT kosong", { path: fileObj.fsName });
+            result.error = "File is empty: " + fileObj.fsName;
+            Logger.error("srtParser", "SRT file is empty", { path: fileObj.fsName });
             return result;
         }
 
-        Logger.debug("srtParser", "File terbaca", { bytes: rawContent.length });
+        Logger.debug("srtParser", "File read successfully", { bytes: rawContent.length });
 
-        // Hapus BOM jika ada di awal
+        // Strip BOM if present
         if (rawContent.charAt(0) === BOM) {
             rawContent = rawContent.substring(1);
         }
 
-        // ── Pisahkan ke baris-baris ──────────────────────────────────────────
-        // Normalkan line ending: CRLF → LF, CR → LF
+        // ── Split into lines ─────────────────────────────────────────────────
         rawContent = rawContent.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
         var lines = rawContent.split("\n");
 
-        // ── State machine parser ─────────────────────────────────────────────
-        // State: "IDLE" → "INDEX" → "TIMECODE" → "TEXT" → kembali ke "IDLE"
         var STATE_IDLE     = 0;
         var STATE_INDEX    = 1;
         var STATE_TIMECODE = 2;
@@ -144,16 +141,10 @@ var SrtParser = (function () {
         var currentEnd     = 0;
         var currentLines   = [];
 
-        /**
-         * Finalisasi entry saat ini dan simpan ke result.entries.
-         */
         function flushEntry() {
             if (currentLines.length > 0) {
-                // Gabungkan baris-baris teks dengan \r (sesuai TextDocument.text AE)
                 var rawText = currentLines.join("\r");
-                // Strip tag HTML
                 var cleanText = stripHtmlTags(rawText);
-                // Trim whitespace awal/akhir keseluruhan
                 cleanText = trim(cleanText);
 
                 if (cleanText.length > 0) {
@@ -165,30 +156,25 @@ var SrtParser = (function () {
                     });
                 }
             }
-            // Reset state
             currentLines = [];
             currentIndex = 0;
             currentStart = 0;
             currentEnd   = 0;
         }
 
-        // ── Loop baris ───────────────────────────────────────────────────────
         for (var i = 0; i < lines.length; i++) {
             var line    = lines[i];
             var trimmed = trim(line);
 
             if (state === STATE_IDLE) {
-                // Abaikan baris kosong antar entry
                 if (trimmed === "") { continue; }
 
-                // Baris nomor urut
                 if (isIndexLine(trimmed)) {
                     currentIndex = parseInt(trimmed, 10);
                     state = STATE_INDEX;
                     continue;
                 }
 
-                // Kadang ada file SRT yang langsung mulai dengan timecode (tanpa nomor urut)
                 if (isTimecodeLine(trimmed)) {
                     currentIndex = result.entries.length + 1;
                     var match = TIMECODE_REGEX.exec(trimmed);
@@ -196,7 +182,7 @@ var SrtParser = (function () {
                     var endSec   = TimeUtils.srtTimeToSeconds(match[2]);
 
                     if (startSec < 0 || endSec < 0) {
-                        result.warnings.push("Baris " + (i + 1) + ": format timecode rusak, dilewati.");
+                        result.warnings.push("Line " + (i + 1) + ": corrupted timecode format, skipped.");
                         state = STATE_IDLE;
                         continue;
                     }
@@ -207,13 +193,11 @@ var SrtParser = (function () {
                     continue;
                 }
 
-                // Baris tidak dikenali di state IDLE — abaikan saja
                 continue;
             }
 
             if (state === STATE_INDEX) {
-                // Ekspektasi: baris timecode
-                if (trimmed === "") { continue; } // toleransi baris kosong antara index & timecode
+                if (trimmed === "") { continue; }
 
                 if (isTimecodeLine(trimmed)) {
                     var match = TIMECODE_REGEX.exec(trimmed);
@@ -221,7 +205,7 @@ var SrtParser = (function () {
                     var endSec   = TimeUtils.srtTimeToSeconds(match[2]);
 
                     if (startSec < 0 || endSec < 0) {
-                        result.warnings.push("Entry #" + currentIndex + " (baris " + (i + 1) + "): format timecode rusak, dilewati.");
+                        result.warnings.push("Entry #" + currentIndex + " (line " + (i + 1) + "): corrupted timecode format, skipped.");
                         state = STATE_IDLE;
                         continue;
                     }
@@ -232,40 +216,36 @@ var SrtParser = (function () {
                     continue;
                 }
 
-                // Bukan timecode — entry mungkin rusak
-                result.warnings.push("Entry #" + currentIndex + " (baris " + (i + 1) + "): timecode tidak ditemukan, dilewati.");
+                result.warnings.push("Entry #" + currentIndex + " (line " + (i + 1) + "): timecode missing, skipped.");
                 state = STATE_IDLE;
                 continue;
             }
 
             if (state === STATE_TEXT) {
-                // Baris kosong = akhir entry saat ini
                 if (trimmed === "") {
                     flushEntry();
                     state = STATE_IDLE;
                     continue;
                 }
 
-                // Baris ini adalah teks subtitle — tambahkan ke buffer
                 currentLines.push(trimmed);
                 continue;
             }
         }
 
-        // Flush entry terakhir jika file tidak diakhiri baris kosong
         if (state === STATE_TEXT && currentLines.length > 0) {
             flushEntry();
         }
 
-        // ── Validasi hasil ───────────────────────────────────────────────────
+        // ── Validation ───────────────────────────────────────────────────────
         if (result.entries.length === 0 && result.warnings.length === 0) {
-            result.error = "Tidak ada entry subtitle yang valid ditemukan di file.";
-            Logger.error("srtParser", "Tidak ada entry valid di file SRT", { path: fileObj.fsName });
+            result.error = "No valid subtitle entries found in the file.";
+            Logger.error("srtParser", "No valid entries in SRT file", { path: fileObj.fsName });
             return result;
         }
 
         result.success = true;
-        Logger.info("srtParser", "Parse selesai", {
+        Logger.info("srtParser", "Parse completed", {
             entries:  result.entries.length,
             warnings: result.warnings.length
         });
