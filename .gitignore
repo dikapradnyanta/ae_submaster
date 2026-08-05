@@ -1,0 +1,21 @@
+# Logs
+*.log
+debug.log
+debug.log.bak
+
+# Documentation and agent rules
+docs/
+.agents/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Antigravity artifacts
+.gemini/
