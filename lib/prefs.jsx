@@ -1,31 +1,31 @@
 /**
  * AESubMaster — prefs.jsx
- * 
- * Simpan dan baca preferensi plugin ke/dari file JSON di Folder.userData.
- * Path: <userData>/AESubMaster/prefs.json
- * 
- * Kompatibel dengan ExtendScript (ES3) — termasuk polyfill JSON minimal
- * untuk versi AE lama yang tidak punya JSON global.
+ *
+ * Reads and writes plugin preferences to a JSON file in Folder.userData.
+ * Storage path: <userData>/AESubMaster/prefs.json
+ *
+ * Includes a minimal JSON polyfill for older AE versions that lack a global JSON object.
+ * ExtendScript (ES3) compatible.
  */
 
 var Prefs = (function () {
 
-    // ─── Konstanta ────────────────────────────────────────────────────────────
+    // ─── Constants ────────────────────────────────────────────────────────────
 
     var PREFS_FOLDER_NAME = "AESubMaster";
     var PREFS_FILE_NAME   = "prefs.json";
 
-    // ─── JSON Polyfill (minimal, untuk flat object + string/number/boolean) ──
-    // Digunakan hanya jika JSON global tidak tersedia (AE versi sangat lama).
+    // ─── JSON Polyfill (minimal — flat objects with primitive values only) ────
+    // Used only when the native JSON global is unavailable (very old AE versions).
 
     var _json = (function () {
-        // Cek ketersediaan JSON bawaan
+        // Use native JSON if available
         if (typeof JSON !== "undefined" && typeof JSON.stringify === "function") {
             return JSON;
         }
 
-        // Polyfill minimal: hanya mendukung flat object (satu level, tipe primitif)
-        // Cukup untuk kebutuhan prefs AESubMaster.
+        // Minimal polyfill: supports flat objects with string, number, and boolean values.
+        // Sufficient for AESubMaster's preferences schema.
         return {
             stringify: function (obj) {
                 if (obj === null || obj === undefined) { return "null"; }
@@ -48,7 +48,7 @@ var Prefs = (function () {
                             } else if (typeof val === "boolean") {
                                 valStr = val ? "true" : "false";
                             } else {
-                                valStr = "null"; // skip nested objects di polyfill
+                                valStr = "null"; // nested objects not supported in polyfill
                             }
                             parts.push('"' + key + '": ' + valStr);
                         }
@@ -60,8 +60,7 @@ var Prefs = (function () {
             },
 
             parse: function (str) {
-                // Gunakan eval yang di-sandboxed dengan Function constructor
-                // untuk parse JSON sederhana. Lebih aman dari eval langsung.
+                // Use Function constructor as a sandboxed eval for simple JSON strings
                 try {
                     return (new Function("return " + str))();
                 } catch (e) {
@@ -71,12 +70,11 @@ var Prefs = (function () {
         };
     })();
 
-    // ─── Helper Internal ──────────────────────────────────────────────────────
+    // ─── Internal Helpers ─────────────────────────────────────────────────────
 
     /**
-     * Dapatkan path folder penyimpanan prefs.
-     * Membuat folder jika belum ada.
-     * 
+     * Resolve the preferences storage folder, creating it if it doesn't exist.
+     *
      * @return {Folder | null}
      */
     function getPrefsFolder() {
@@ -95,8 +93,8 @@ var Prefs = (function () {
     }
 
     /**
-     * Dapatkan objek File untuk prefs.json.
-     * 
+     * Resolve the preferences file object.
+     *
      * @return {File | null}
      */
     function getPrefsFile() {
@@ -110,29 +108,27 @@ var Prefs = (function () {
         }
     }
 
-    // ─── Fungsi Utama ─────────────────────────────────────────────────────────
+    // ─── Public Functions ─────────────────────────────────────────────────────
 
     /**
-     * Simpan data preferensi ke file JSON.
-     * 
-     * Data yang bisa disimpan (flat object, nilai primitif):
-     *   {
-     *     lastFfxPath: String   // path .ffx template terakhir dipakai
-     *   }
-     * 
-     * @param  {Object}  data   Object preferensi yang akan disimpan
-     * @return {Object}  { success: Boolean, error: String }
+     * Save preferences data to disk as JSON.
+     *
+     * Supported schema (flat object, primitive values only):
+     *   { lastFfxPath: String }
+     *
+     * @param  {Object}  data   Preferences object to persist
+     * @return {Object}         { success: Boolean, error: String }
      */
     function savePrefs(data) {
         if (!data || typeof data !== "object") {
             Logger.error("prefs", "savePrefs: invalid data object");
-            return { success: false, error: "Data prefs tidak valid." };
+            return { success: false, error: "Preferences data is not a valid object." };
         }
 
         var prefsFile = getPrefsFile();
         if (!prefsFile) {
             Logger.error("prefs", "savePrefs: cannot access prefs file");
-            return { success: false, error: "Tidak bisa mengakses folder penyimpanan preferensi (" + Folder.userData.fsName + "/" + PREFS_FOLDER_NAME + ")." };
+            return { success: false, error: "Cannot access preferences folder (" + Folder.userData.fsName + "/" + PREFS_FOLDER_NAME + ")." };
         }
 
         try {
@@ -140,22 +136,27 @@ var Prefs = (function () {
 
             prefsFile.encoding = "UTF-8";
             if (!prefsFile.open("w")) {
-                Logger.error("prefs", "savePrefs: failed opening file for write", { path: prefsFile.fsName });
-                return { success: false, error: "Tidak bisa membuka file prefs untuk ditulis." };
+                Logger.error("prefs", "savePrefs: failed to open file for writing", { path: prefsFile.fsName });
+                return { success: false, error: "Cannot open preferences file for writing." };
             }
 
             prefsFile.write(jsonStr);
             prefsFile.close();
 
-            Logger.debug("prefs", "Prefs saved successfully", data);
+            Logger.debug("prefs", "Preferences saved", data);
             return { success: true };
         } catch (e) {
             try { prefsFile.close(); } catch (ignore) {}
             Logger.error("prefs", "savePrefs exception", e);
-            return { success: false, error: "Gagal menyimpan prefs: " + e.toString() };
+            return { success: false, error: "Failed to save preferences: " + e.toString() };
         }
     }
 
+    /**
+     * Load preferences from disk.
+     *
+     * @return {Object}   Parsed preferences object, or {} if file doesn't exist or is unreadable.
+     */
     function loadPrefs() {
         var prefsFile = getPrefsFile();
         if (!prefsFile || !prefsFile.exists) { return {}; }
@@ -163,7 +164,7 @@ var Prefs = (function () {
         try {
             prefsFile.encoding = "UTF-8";
             if (!prefsFile.open("r")) {
-                Logger.warn("prefs", "loadPrefs: failed opening file for read");
+                Logger.warn("prefs", "loadPrefs: failed to open file for reading");
                 return {};
             }
 
@@ -172,18 +173,18 @@ var Prefs = (function () {
 
             if (!content || content.length === 0) { return {}; }
 
-            // Hapus BOM jika ada
+            // Strip BOM if present
             if (content.charAt(0) === "\uFEFF") {
                 content = content.substring(1);
             }
 
             var parsed = _json.parse(content);
             if (!parsed || typeof parsed !== "object") {
-                Logger.warn("prefs", "loadPrefs: JSON parse result not an object");
+                Logger.warn("prefs", "loadPrefs: JSON parse did not return an object");
                 return {};
             }
 
-            Logger.debug("prefs", "Prefs loaded", parsed);
+            Logger.debug("prefs", "Preferences loaded", parsed);
             return parsed;
         } catch (e) {
             try { prefsFile.close(); } catch (ignore) {}
@@ -193,10 +194,10 @@ var Prefs = (function () {
     }
 
     /**
-     * Baca satu nilai dari prefs berdasarkan key.
-     * 
-     * @param  {String}  key            Nama preferensi
-     * @param  {*}       defaultValue   Nilai default jika key tidak ada
+     * Read a single preference value by key.
+     *
+     * @param  {String}  key            Preference key
+     * @param  {*}       defaultValue   Returned if the key is missing
      * @return {*}
      */
     function getPref(key, defaultValue) {
@@ -208,8 +209,8 @@ var Prefs = (function () {
     }
 
     /**
-     * Set satu nilai di prefs (merge dengan nilai yang sudah ada).
-     * 
+     * Set a single preference value (merges with existing data).
+     *
      * @param  {String}  key
      * @param  {*}       value
      * @return {Object}  { success: Boolean, error: String }

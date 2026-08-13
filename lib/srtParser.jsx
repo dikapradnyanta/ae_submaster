@@ -1,31 +1,31 @@
 /**
  * AESubMaster — srtParser.jsx
- * 
- * Parsing file .srt menjadi array of subtitle entries yang terstruktur.
- * Membutuhkan TimeUtils (timeUtils.jsx) sudah di-#include sebelum file ini.
- * 
- * Kompatibel dengan ExtendScript (ES3) — tidak ada let/const/arrow function.
+ *
+ * Parses a .srt file into a structured array of subtitle entries.
+ * Requires TimeUtils (timeUtils.jsx) to be #included before this file.
+ *
+ * ExtendScript (ES3) compatible — no let/const/arrow functions.
  */
 
 var SrtParser = (function () {
 
-    // ─── Konstanta ────────────────────────────────────────────────────────────
+    // ─── Constants ────────────────────────────────────────────────────────────
 
-    /** BOM UTF-8 yang kadang muncul di awal file */
+    /** UTF-8 BOM character that may appear at the start of some SRT files */
     var BOM = "\uFEFF";
 
-    /** Regex untuk baris timecode SRT: "HH:MM:SS,MIL --> HH:MM:SS,MIL" */
+    /** Regex to match an SRT timecode line: "HH:MM:SS,MIL --> HH:MM:SS,MIL" */
     var TIMECODE_REGEX = /^(\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3})/;
 
-    /** Tag HTML yang perlu di-strip dari teks subtitle */
+    /** Regex to strip HTML tags from subtitle text (e.g. <b>, <i>, <font ...>) */
     var HTML_TAG_REGEX = /<[^>]+>/g;
 
-    // ─── Helper Internal ──────────────────────────────────────────────────────
+    // ─── Internal Helpers ─────────────────────────────────────────────────────
 
     /**
-     * Strip tag HTML dasar dari string teks.
-     * Menangani: <b>, </b>, <i>, </i>, <font color="...">, </font>, dll.
-     * 
+     * Strip basic HTML tags from a string.
+     * Handles: <b>, </b>, <i>, </i>, <font color="...">, </font>, etc.
+     *
      * @param  {String} text
      * @return {String}
      */
@@ -34,9 +34,9 @@ var SrtParser = (function () {
     }
 
     /**
-     * Trim whitespace dari kedua ujung string.
-     * ExtendScript lama tidak selalu punya String.prototype.trim().
-     * 
+     * Trim leading and trailing whitespace.
+     * Polyfill for older ExtendScript runtimes that may lack String.prototype.trim().
+     *
      * @param  {String} str
      * @return {String}
      */
@@ -45,9 +45,9 @@ var SrtParser = (function () {
     }
 
     /**
-     * Cek apakah string merupakan baris nomor urut subtitle yang valid.
-     * Harus berupa integer positif (boleh dengan whitespace di sekitarnya).
-     * 
+     * Check whether a string is a valid SRT sequence number line.
+     * Must be a positive integer, optionally surrounded by whitespace.
+     *
      * @param  {String} str
      * @return {Boolean}
      */
@@ -56,8 +56,8 @@ var SrtParser = (function () {
     }
 
     /**
-     * Cek apakah string merupakan baris timecode SRT yang valid.
-     * 
+     * Check whether a string is a valid SRT timecode line.
+     *
      * @param  {String} str
      * @return {Boolean}
      */
@@ -65,17 +65,17 @@ var SrtParser = (function () {
         return TIMECODE_REGEX.test(str);
     }
 
-    // ─── Fungsi Utama ─────────────────────────────────────────────────────────
+    // ─── Main Function ────────────────────────────────────────────────────────
 
     /**
-     * Parse file SRT menjadi array entries terstruktur.
-     * 
-     * @param  {File} fileObj    Objek File dari After Effects (bukan path string)
+     * Parse an SRT file into a structured array of subtitle entries.
+     *
+     * @param  {File} fileObj    AE File object (not a path string)
      * @return {Object}          {
      *                             success:  Boolean,
      *                             entries:  Array of { index, startSeconds, endSeconds, text },
      *                             warnings: Array of String,
-     *                             error:    String (hanya ada jika success: false)
+     *                             error:    String  (only present when success: false)
      *                           }
      */
     function parseSRT(fileObj) {
@@ -86,7 +86,7 @@ var SrtParser = (function () {
             error:    ""
         };
 
-        // ── File Validation ──────────────────────────────────────────────────
+        // ── Input validation ─────────────────────────────────────────────────
         if (!fileObj || !(fileObj instanceof File)) {
             result.error = "Input is not a valid File object.";
             Logger.error("srtParser", "parseSRT failed: input is not a File object");
@@ -101,7 +101,7 @@ var SrtParser = (function () {
             return result;
         }
 
-        // ── Open and read file (with multi-encoding fallback) ────────────────
+        // ── Open and read file (multi-encoding fallback) ──────────────────────
         fileObj.encoding = "UTF-8";
         if (!fileObj.open("r")) {
             result.error = "Cannot open file (may be locked by another process): " + fileObj.fsName;
@@ -130,7 +130,7 @@ var SrtParser = (function () {
             }
         }
 
-        // Clean any remaining null bytes
+        // Strip any remaining null bytes from the content
         if (rawContent) {
             rawContent = rawContent.replace(/\u0000/g, "");
         }
@@ -148,7 +148,7 @@ var SrtParser = (function () {
             rawContent = rawContent.substring(1);
         }
 
-        // ── Split into lines ─────────────────────────────────────────────────
+        // ── Split content into lines ─────────────────────────────────────────
         rawContent = rawContent.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
         var lines = rawContent.split("\n");
 
@@ -157,17 +157,17 @@ var SrtParser = (function () {
         var STATE_TIMECODE = 2;
         var STATE_TEXT     = 3;
 
-        var state          = STATE_IDLE;
-        var currentIndex   = 0;
-        var currentStart   = 0;
-        var currentEnd     = 0;
-        var currentLines   = [];
+        var state        = STATE_IDLE;
+        var currentIndex = 0;
+        var currentStart = 0;
+        var currentEnd   = 0;
+        var currentLines = [];
 
+        // Finalize and push the current subtitle block into result.entries
         function flushEntry() {
             if (currentLines.length > 0) {
-                var rawText = currentLines.join("\r");
-                var cleanText = stripHtmlTags(rawText);
-                cleanText = trim(cleanText);
+                var rawText   = currentLines.join("\r");
+                var cleanText = trim(stripHtmlTags(rawText));
 
                 if (cleanText.length > 0) {
                     result.entries.push({
@@ -197,9 +197,10 @@ var SrtParser = (function () {
                     continue;
                 }
 
+                // Handle files without sequence numbers — go straight to timecode
                 if (isTimecodeLine(trimmed)) {
                     currentIndex = result.entries.length + 1;
-                    var match = TIMECODE_REGEX.exec(trimmed);
+                    var match    = TIMECODE_REGEX.exec(trimmed);
                     var startSec = TimeUtils.srtTimeToSeconds(match[1]);
                     var endSec   = TimeUtils.srtTimeToSeconds(match[2]);
 
@@ -222,7 +223,7 @@ var SrtParser = (function () {
                 if (trimmed === "") { continue; }
 
                 if (isTimecodeLine(trimmed)) {
-                    var match = TIMECODE_REGEX.exec(trimmed);
+                    var match    = TIMECODE_REGEX.exec(trimmed);
                     var startSec = TimeUtils.srtTimeToSeconds(match[1]);
                     var endSec   = TimeUtils.srtTimeToSeconds(match[2]);
 
@@ -245,6 +246,7 @@ var SrtParser = (function () {
 
             if (state === STATE_TEXT) {
                 if (trimmed === "") {
+                    // Blank line signals end of current block
                     flushEntry();
                     state = STATE_IDLE;
                     continue;
@@ -255,11 +257,12 @@ var SrtParser = (function () {
             }
         }
 
+        // Flush the last entry if the file doesn't end with a blank line
         if (state === STATE_TEXT && currentLines.length > 0) {
             flushEntry();
         }
 
-        // ── Validation ───────────────────────────────────────────────────────
+        // ── Final validation ─────────────────────────────────────────────────
         if (result.entries.length === 0 && result.warnings.length === 0) {
             result.error = "No valid subtitle entries found in the file.";
             Logger.error("srtParser", "No valid entries in SRT file", { path: fileObj.fsName });
@@ -271,26 +274,21 @@ var SrtParser = (function () {
             entries:  result.entries.length,
             warnings: result.warnings.length
         });
-        if (result.warnings.length > 0) {
-            for (var wi = 0; wi < result.warnings.length; wi++) {
-                Logger.warn("srtParser", result.warnings[wi]);
-            }
+        for (var wi = 0; wi < result.warnings.length; wi++) {
+            Logger.warn("srtParser", result.warnings[wi]);
         }
         return result;
     }
 
-    // ─── Test Manual ─────────────────────────────────────────────────────────
+    // ─── Self-test ────────────────────────────────────────────────────────────
     /**
-     * Jalankan test parser dengan konten SRT statis (tanpa file fisik).
-     * Hanya untuk verifikasi di ESTK / Konsol AE.
-     * 
-     * Cara pakai: uncomment SrtParser.runTests() di bawah.
+     * Run helper function tests in ESTK / AE console.
+     * Full parseSRT testing requires a physical SRT file via the panel.
+     *
+     * Usage: uncomment SrtParser.runTests() below.
      */
     function runTests() {
         $.writeln("=== SrtParser Tests ===");
-
-        // Simulasi file dengan membaca dari string (perlu file sementara)
-        // Test ini memvalidasi fungsi-fungsi helper saja karena parseSRT butuh File object.
 
         $.writeln("  stripHtmlTags('<b>Hello</b> <i>World</i>'):");
         var stripped = stripHtmlTags("<b>Hello</b> <i>World</i>");
@@ -308,7 +306,7 @@ var SrtParser = (function () {
         $.writeln("  isTimecodeLine('Hello world'): " + (!isTimecodeLine("Hello world") ? "PASS (false)" : "FAIL"));
 
         $.writeln("=== End SrtParser Tests ===");
-        $.writeln("Untuk test parseSRT penuh, gunakan file SRT nyata lewat panel.");
+        $.writeln("For full parseSRT testing, use a real SRT file via the panel.");
     }
 
     // ─── Public API ──────────────────────────────────────────────────────────
@@ -319,5 +317,5 @@ var SrtParser = (function () {
 
 })();
 
-// Uncomment untuk test helper internal:
+// Uncomment to run helper self-tests:
 // SrtParser.runTests();

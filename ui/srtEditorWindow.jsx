@@ -9,20 +9,20 @@
 
 function openSrtEditor(srtFilePath, onSavedCallback) {
     if (!srtFilePath || srtFilePath === "") {
-        alert("Pilih file SRT terlebih dahulu di panel utama.");
+        alert("Please select an SRT file in the main panel first.");
         return;
     }
 
     var srtFile = new File(srtFilePath);
     if (!srtFile.exists) {
-        alert("File SRT tidak ditemukan: " + srtFilePath);
+        alert("SRT file not found: " + srtFilePath);
         return;
     }
 
     // Parse SRT
     var parseResult = SrtParser.parseSRT(srtFile);
     if (!parseResult.success) {
-        alert("Gagal membaca SRT: " + parseResult.error);
+        alert("Failed to read SRT: " + parseResult.error);
         return;
     }
 
@@ -42,10 +42,10 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
     grpHeader.alignChildren = ["fill", "center"];
     grpHeader.spacing = 6;
 
-    var lblTitle = grpHeader.add("statictext", undefined, "📝 Editor Subtitle SRT");
+    var lblTitle = grpHeader.add("statictext", undefined, "📝 SRT Subtitle Editor");
     try { lblTitle.graphics.font = ScriptUI.newFont("dialog", "BOLD", 13); } catch (ignore) {}
 
-    var lblCount = grpHeader.add("statictext", undefined, "(" + entries.length + " baris)");
+    var lblCount = grpHeader.add("statictext", undefined, "(" + entries.length + " lines)");
     lblCount.alignment = ["right", "center"];
 
     // ── Search Bar ───────────────────────────────────────────────────────────
@@ -54,16 +54,16 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
     grpSearch.alignChildren = ["fill", "center"];
     grpSearch.spacing = 6;
 
-    grpSearch.add("statictext", undefined, "Cari:");
+    grpSearch.add("statictext", undefined, "Search:");
     var txtSearch = grpSearch.add("edittext", undefined, "");
     txtSearch.alignment = ["fill", "center"];
-    txtSearch.helpTip = "Ketik teks untuk menyaring daftar subtitle";
+    txtSearch.helpTip = "Type text to filter subtitle list";
 
     // ── ListBox (Premiere Pro Captions Style) ────────────────────────────────
     var lstEntries = win.add("listbox", undefined, [], {
         numberOfColumns: 4,
         showHeaders: true,
-        columnTitles: ["#", "In Point", "Out Point", "Teks Subtitle"],
+        columnTitles: ["#", "In Point", "Out Point", "Subtitle Text"],
         columnWidths: [35, 95, 95, 260]
     });
     lstEntries.alignment = ["fill", "fill"];
@@ -88,7 +88,7 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
             row.subItems[2].text = txtSingle;
             row.entryIndex = i; // Simpan index asli
         }
-        lblCount.text = "(" + entries.length + " baris)";
+        lblCount.text = "(" + entries.length + " lines)";
     }
 
     populateList("");
@@ -98,7 +98,7 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
     };
 
     // ── Detail Editor Box (Bawah ListBox) ────────────────────────────────────
-    var grpDetail = win.add("panel", undefined, "Edit Baris Terpilih");
+    var grpDetail = win.add("panel", undefined, "Edit Selected Line");
     grpDetail.alignment = ["fill", "top"];
     grpDetail.orientation = "column";
     grpDetail.alignChildren = ["fill", "top"];
@@ -119,7 +119,7 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
     var txtEnd = grpTimes.add("edittext", undefined, "00:00:00,000");
     txtEnd.preferredSize.width = 100;
 
-    var lblDuration = grpTimes.add("statictext", undefined, "Durasi: 0.0s");
+    var lblDuration = grpTimes.add("statictext", undefined, "Duration: 0.0s");
     lblDuration.alignment = ["fill", "center"];
 
     // Row Subtitle Text (Multiline)
@@ -128,12 +128,12 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
     grpText.alignChildren = ["fill", "top"];
     grpText.spacing = 2;
 
-    grpText.add("statictext", undefined, "Teks Subtitle:");
+    grpText.add("statictext", undefined, "Subtitle Text:");
     var txtContent = grpText.add("edittext", undefined, "", { multiline: true, scrolling: true });
     txtContent.alignment = ["fill", "top"];
     txtContent.preferredSize.height = 55;
 
-    var btnUpdateLine = grpDetail.add("button", undefined, "✓ Update Baris Ini");
+    var btnUpdateLine = grpDetail.add("button", undefined, "✓ Update Line");
     btnUpdateLine.alignment = ["right", "top"];
     btnUpdateLine.preferredSize = [130, 22];
 
@@ -154,13 +154,13 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
         txtContent.text = entry.text;
 
         var dur = (entry.endSeconds - entry.startSeconds).toFixed(2);
-        lblDuration.text = "Durasi: " + dur + "s";
+        lblDuration.text = "Duration: " + dur + "s";
     };
 
     /** Update entry terpilih dari input form */
     btnUpdateLine.onClick = function () {
         if (selectedEntryIndex < 0 || selectedEntryIndex >= entries.length) {
-            alert("Pilih baris subtitle di tabel terlebih dahulu.");
+            alert("Please select a subtitle line in the table first.");
             return;
         }
 
@@ -168,7 +168,7 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
         var newEnd   = TimeUtils.srtTimeToSeconds(txtEnd.text);
 
         if (newEnd <= newStart) {
-            alert("Waktu Out harus lebih besar dari waktu In.");
+            alert("Out time must be greater than In time.");
             return;
         }
 
@@ -195,17 +195,17 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
     grpActions.spacing = 6;
     grpActions.margins = [0, 4, 0, 0];
 
-    var btnAdd = grpActions.add("button", undefined, "+ Tambah Baris");
+    var btnAdd = grpActions.add("button", undefined, "+ Add Line");
     btnAdd.preferredSize = [110, 24];
 
-    var btnDelete = grpActions.add("button", undefined, "- Hapus Baris");
+    var btnDelete = grpActions.add("button", undefined, "- Delete Line");
     btnDelete.preferredSize = [110, 24];
 
-    var btnSave = grpActions.add("button", undefined, "💾 Simpan ke File");
+    var btnSave = grpActions.add("button", undefined, "💾 Save to File");
     btnSave.alignment = ["fill", "center"];
     btnSave.preferredSize.height = 24;
 
-    var btnApply = grpActions.add("button", undefined, "✔ Simpan & Pakai");
+    var btnApply = grpActions.add("button", undefined, "✔ Save & Apply");
     btnApply.alignment = ["fill", "center"];
     btnApply.preferredSize.height = 24;
 
@@ -220,7 +220,7 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
             index:        entries.length + 1,
             startSeconds: lastEnd,
             endSeconds:   lastEnd + 2.5,
-            text:         "Subtitle Baru"
+            text:         "New Subtitle"
         };
 
         entries.push(newEntry);
@@ -231,7 +231,7 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
     // Hapus baris subtitle
     btnDelete.onClick = function () {
         if (selectedEntryIndex < 0 || selectedEntryIndex >= entries.length) {
-            alert("Pilih baris subtitle yang ingin dihapus.");
+            alert("Please select a subtitle line to delete.");
             return;
         }
 
@@ -245,9 +245,9 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
     btnSave.onClick = function () {
         var res = SrtWriter.writeSRT(srtFile, entries);
         if (res.success) {
-            alert("File SRT berhasil disimpan!");
+            alert("SRT file saved successfully!");
         } else {
-            alert("Gagal menyimpan SRT: " + res.error);
+            alert("Failed to save SRT: " + res.error);
         }
     };
 
@@ -260,7 +260,7 @@ function openSrtEditor(srtFilePath, onSavedCallback) {
             }
             win.close();
         } else {
-            alert("Gagal menyimpan SRT: " + res.error);
+            alert("Failed to save SRT: " + res.error);
         }
     };
 

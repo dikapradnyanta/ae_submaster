@@ -1,41 +1,42 @@
 /**
  * AESubMaster — panel.jsx
- * 
- * Membangun ScriptUI panel sesuai design.md — hierarki A → F:
+ *
+ * Builds the ScriptUI panel following the design.md hierarchy (sections A → F):
  *   A. Header
  *   B. Target Composition & Template Layer
- *   C. Input File SRT
- *   D. Opsi Eksekusi
- *   E. Tombol Generate & Re-import
+ *   C. SRT File Input
+ *   D. Options
+ *   E. Generate & Re-import Buttons
  *   F. Log & Status
- * 
- * Membutuhkan semua modul lib/ sudah di-#include sebelum file ini.
- * Kompatibel dengan ExtendScript (ES3).
+ *
+ * Requires all lib/ modules to be #included before this file.
+ * ExtendScript (ES3) compatible.
  */
 
 /**
- * Bangun dan return panel AESubMaster.
- * 
- * @param  {Window|Panel} thisObj   Konteks dari AESubMaster.jsx (bisa Panel atau Window)
+ * Build and return the AESubMaster panel.
+ *
+ * @param  {Window|Panel} thisObj   Context passed from AESubMaster.jsx (Panel when docked, Window otherwise)
  * @return {Window|Panel}
  */
 function buildPanel(thisObj) {
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // KONSTANTA & STATE
+    // CONSTANTS & STATE
     // ═══════════════════════════════════════════════════════════════════════════
 
     var PANEL_TITLE    = "AESubMaster";
     var PANEL_SUBTITLE = "SRT to Template Layer";
 
-    /** State aktif panel — diperbarui saat user berinteraksi */
+    /** Active state of the panel — updated on user interaction */
     var state = {
-        selectedComp:          null,   // CompItem terpilih
-        templateLayer:         null,   // Layer template terpilih
-        templateLayerIndex:    -1,     // Index layer template di comp (untuk re-validasi)
-        srtFilePath:           "",     // Path file SRT terpilih
-        templateLayerName:     "",     // Nama layer template (untuk display)
-        lastFfxPath:           ""      // Path .ffx terakhir (dari prefs)
+        selectedComp:          null,   // Selected CompItem
+        templateLayer:         null,   // Selected template layer
+        templateLayerIndex:    -1,     // Index of template layer in comp (for re-validation)
+        srtFilePath:           "",     // Path of selected SRT file
+        templateLayerName:     "",     // Template layer name (for display)
+        lastFfxPath:           "",     // Last .ffx path (from prefs)
+        compFps:               25      // Active comp FPS (default 25)
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -43,7 +44,48 @@ function buildPanel(thisObj) {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Tulis pesan ke log area dan ke sistem Logger.
+     * Return the active composition's frame rate. Defaults to 25 if unavailable.
+     * @return {Number}
+     */
+    function getFps() {
+        try {
+            if (state.selectedComp && state.selectedComp.frameRate) {
+                return state.selectedComp.frameRate;
+            }
+        } catch (ignore) {}
+        return 25;
+    }
+
+    /**
+     * Format seconds as HH:MM:SS:FF using the active composition's FPS.
+     * @param  {Number} seconds
+     * @return {String}
+     */
+    function formatTimeDisplay(seconds) {
+        return TimeUtils.secondsToAETime(seconds, getFps());
+    }
+
+    /**
+     * Parse a user-typed time string. Accepts HH:MM:SS:FF (frame-based) or HH:MM:SS,ms (SRT).
+     * @param  {String} str
+     * @return {Number}  Seconds, or -1 if the format is invalid.
+     */
+    function parseTimeInput(str) {
+        // Try frame-based format first (HH:MM:SS:FF — 3 colon separators)
+        var colonCount = 0;
+        for (var ci = 0; ci < str.length; ci++) {
+            if (str.charAt(ci) === ":") { colonCount++; }
+        }
+        if (colonCount === 3) {
+            var v = TimeUtils.aeTimeToSeconds(str, getFps());
+            if (v >= 0) { return v; }
+        }
+        // Fallback to SRT millisecond format (HH:MM:SS,ms)
+        return TimeUtils.srtTimeToSeconds(str);
+    }
+
+    /**
+     * Append a message to the log area and mirror it to the Logger system.
      * @param {String} msg
      */
     var lastLogText = "";
@@ -67,7 +109,7 @@ function buildPanel(thisObj) {
         } catch (e) {}
     }
 
-    /** Bersihkan log area */
+    /** Clear the log area. */
     function clearLog() {
         try {
             lastLogText = "";
@@ -76,8 +118,8 @@ function buildPanel(thisObj) {
     }
 
     /**
-     * Update label status di atas log area.
-     * @param {String} msg    Teks status
+     * Update the status label above the log area.
+     * @param {String} msg    Status text
      * @param {String} type   "ready" | "processing" | "done" | "error"
      */
     function setStatus(msg, type) {
@@ -87,8 +129,8 @@ function buildPanel(thisObj) {
     }
 
     /**
-     * Enable/disable tombol Generate dan Re-import berdasarkan state.
-     * Tombol aktif hanya jika template layer DAN file SRT sudah dipilih.
+     * Enable / disable Generate and Re-import buttons based on current state.
+     * Both buttons require a template layer AND an SRT file to be selected.
      */
     function updateButtonState() {
         var ready = (state.templateLayer !== null && state.srtFilePath !== "");
@@ -100,7 +142,7 @@ function buildPanel(thisObj) {
     }
 
     /**
-     * Ambil daftar semua CompItem yang ada di project saat ini.
+     * Return all CompItems in the current project.
      * @return {Array} Array of CompItem
      */
     function getAllComps() {
@@ -119,9 +161,9 @@ function buildPanel(thisObj) {
     }
 
     /**
-     * Ambil daftar text layer dari sebuah CompItem.
+     * Return all text layers in a composition as { name, index, layer } objects.
      * @param  {CompItem} comp
-     * @return {Array}    Array of { name: String, index: Number, layer: Layer }
+     * @return {Array}
      */
     function getTextLayers(comp) {
         var layers = [];
@@ -130,7 +172,7 @@ function buildPanel(thisObj) {
         for (var i = 1; i <= comp.layers.length; i++) {
             try {
                 var layer = comp.layers[i];
-                // Cek apakah text layer dengan mencoba akses "Source Text"
+                // Detect text layer by the presence of the "Source Text" property
                 if (layer.property("Source Text")) {
                     layers.push({ name: layer.name, index: i, layer: layer });
                 }
@@ -140,7 +182,7 @@ function buildPanel(thisObj) {
     }
 
     /**
-     * Populate dropdown komposis dari project.
+     * Populate the composition dropdown from all CompItems in the project.
      */
     function refreshCompDropdown() {
         try {
@@ -148,7 +190,7 @@ function buildPanel(thisObj) {
             var comps = getAllComps();
 
             if (comps.length === 0) {
-                ddComp.add("item", "(tidak ada comp)");
+                ddComp.add("item", "(no compositions)");
                 ddComp.enabled = false;
                 return;
             }
@@ -158,7 +200,7 @@ function buildPanel(thisObj) {
 
             for (var i = 0; i < comps.length; i++) {
                 ddComp.add("item", comps[i].name);
-                // Default ke comp aktif (yang sedang dibuka di viewer)
+                // Default to the currently active composition in the viewer
                 if (app.project.activeItem instanceof CompItem &&
                     comps[i] === app.project.activeItem) {
                     activeIndex = i;
@@ -166,16 +208,15 @@ function buildPanel(thisObj) {
             }
 
             ddComp.selection = activeIndex;
-            // Trigger update state
             onCompSelected();
         } catch (e) {
-            log("⚠ Gagal memuat daftar composition: " + e.toString());
+            log("[WARN] Failed to load composition list: " + e.toString());
         }
     }
 
     /**
-     * Populate dropdown layer dari comp yang dipilih.
-     * Otomatis memilih layer yang sedang aktif/dipilih di timeline After Effects.
+     * Populate the layer dropdown from the selected composition.
+     * Automatically pre-selects the layer currently selected in the AE timeline.
      */
     function refreshLayerDropdown() {
         try {
@@ -184,7 +225,7 @@ function buildPanel(thisObj) {
             updateButtonState();
 
             if (!state.selectedComp) {
-                ddLayer.add("item", "(pilih comp dulu)");
+                ddLayer.add("item", "(please select a comp)");
                 ddLayer.enabled = false;
                 return;
             }
@@ -192,14 +233,14 @@ function buildPanel(thisObj) {
             var textLayers = getTextLayers(state.selectedComp);
 
             if (textLayers.length === 0) {
-                ddLayer.add("item", "(tidak ada text layer)");
+                ddLayer.add("item", "(no text layers)");
                 ddLayer.enabled = false;
                 return;
             }
 
             ddLayer.enabled = true;
 
-            // Deteksi layer yang sedang dipilih user di timeline AE
+            // Pre-select the layer currently selected in the AE timeline
             var targetIndex = 0;
             try {
                 var selLayers = state.selectedComp.selectedLayers;
@@ -220,12 +261,12 @@ function buildPanel(thisObj) {
             ddLayer.selection = targetIndex;
             onLayerSelected();
         } catch (e) {
-            log("⚠ Gagal memuat daftar layer: " + e.toString());
+            log("[WARN] Failed to load layer list: " + e.toString());
         }
     }
 
     /**
-     * Sinkronisasi otomatis Composition & Layer aktif dari After Effects ke panel.
+     * Sync the panel's composition and layer dropdowns to the currently active AE item.
      */
     function syncActiveCompAndLayer() {
         try {
@@ -244,27 +285,28 @@ function buildPanel(thisObj) {
         } catch (ignore) {}
     }
 
-    /**
-     * Handler saat comp dropdown berubah.
-     */
+    /** Handle composition dropdown change. */
     function onCompSelected() {
         try {
             var comps = getAllComps();
             var idx   = ddComp.selection ? ddComp.selection.index : 0;
             if (idx >= 0 && idx < comps.length) {
                 state.selectedComp = comps[idx];
+                // Update FPS from the selected composition
+                try {
+                    state.compFps = comps[idx].frameRate || 25;
+                } catch (ignore) { state.compFps = 25; }
             } else {
                 state.selectedComp = null;
+                state.compFps = 25;
             }
             refreshLayerDropdown();
         } catch (e) {
-            log("⚠ Error saat memilih comp: " + e.toString());
+            log("[WARN] Error selecting comp: " + e.toString());
         }
     }
 
-    /**
-     * Handler saat layer dropdown berubah.
-     */
+    /** Handle layer dropdown change. */
     function onLayerSelected() {
         try {
             if (!state.selectedComp || !ddLayer.selection) {
@@ -287,15 +329,15 @@ function buildPanel(thisObj) {
             }
             updateButtonState();
         } catch (e) {
-            log("⚠ Error saat memilih layer: " + e.toString());
+            log("[WARN] Error selecting layer: " + e.toString());
         }
     }
 
     /**
-     * Proses utama: generate subtitle layers dari SRT.
-     * Dipanggil oleh tombol Generate dan Re-import.
-     * 
-     * @param {Boolean} isReimport   Jika true, hapus layer lama sebelum generate.
+     * Core generation logic: parse SRT and create subtitle layers.
+     * Called by both the Generate and Re-import buttons.
+     *
+     * @param {Boolean} isReimport   If true, removes existing generated layers before creating new ones.
      */
     function runGenerate(isReimport) {
         clearLog();
@@ -369,10 +411,57 @@ function buildPanel(thisObj) {
         var doSyncMarker      = chkSyncMarker.value;
         var doAutoAdjustComp  = chkAutoAdjustComp.value;
 
+        // ── Read Fit Out/In option ───────────────────────────────────────────
+        var fitMode = "none";
+        try {
+            var fitSel = ddFit.selection;
+            if (fitSel) {
+                if (fitSel.index === 1) { fitMode = "fitOut"; }
+                else if (fitSel.index === 2) { fitMode = "fitIn"; }
+            }
+        } catch (ignore) {}
+
+        // ── Read Lead In / Lead Out values ───────────────────────────────────
+        var leadInSec  = 0;
+        var leadOutSec = 0;
+        try {
+            var fps = getFps();
+            var leadInVal  = parseFloat(txtLeadIn.text)  || 0;
+            var leadOutVal = parseFloat(txtLeadOut.text) || 0;
+            if (leadInVal  < 0) { leadInVal  = 0; }
+            if (leadOutVal < 0) { leadOutVal = 0; }
+
+            // Convert to seconds based on selected unit
+            var useFrames = (ddLeadUnit && ddLeadUnit.selection && ddLeadUnit.selection.index === 0);
+            if (useFrames) {
+                leadInSec  = leadInVal  / fps;
+                leadOutSec = leadOutVal / fps;
+            } else {
+                leadInSec  = leadInVal;
+                leadOutSec = leadOutVal;
+            }
+        } catch (ignore) {}
+
+        // ── Apply Fit Out/In to entry timings ────────────────────────────────
+        if (fitMode === "fitOut") {
+            // Extend each subtitle's end to the start of the next subtitle (no gap)
+            for (var fi = 0; fi < entries.length - 1; fi++) {
+                entries[fi].endSeconds = entries[fi + 1].startSeconds;
+            }
+            log("[INFO] Fit Out applied: subtitle duration extended to next subtitle start.");
+        } else if (fitMode === "fitIn") {
+            // Push each subtitle's start back to the end of the previous subtitle (no gap)
+            for (var fi = 1; fi < entries.length; fi++) {
+                entries[fi].startSeconds = entries[fi - 1].endSeconds;
+            }
+            log("[INFO] Fit In applied: subtitle start moved to previous subtitle end.");
+        }
+
+        // Use the template's original timing as reference for marker sync
         var templateStartTime = state.templateLayer.startTime;
         var templateOutPoint  = state.templateLayer.outPoint;
 
-        // ── Undo Group ───────────────────────────────────────────────────────
+        // ── Begin undo group ─────────────────────────────────────────────────
         app.beginUndoGroup(isReimport ? "AESubMaster: Re-import Subtitles" : "AESubMaster: Generate Subtitles");
 
         if (isReimport) {
@@ -398,7 +487,7 @@ function buildPanel(thisObj) {
                 var dupResult = LayerDuplicator.duplicateAsSubtitle(
                     state.templateLayer,
                     entry,
-                    {}
+                    { leadIn: leadInSec, leadOut: leadOutSec }
                 );
 
                 if (!dupResult.success) {
@@ -410,12 +499,16 @@ function buildPanel(thisObj) {
 
                 if (doSyncMarker) {
                     try {
+                        // Use the post-lead-adjustment timing for marker sync
+                        var actualStart = dupResult.actualStart || entry.startSeconds;
+                        var actualEnd   = dupResult.actualEnd   || entry.endSeconds;
+
                         var syncResult = MarkerSync.syncOutMarker(
                             dupResult.layer,
                             templateStartTime,
                             templateOutPoint,
-                            entry.startSeconds,
-                            entry.endSeconds,
+                            actualStart,
+                            actualEnd,
                             MarkerSync.KNOWN_OUT_MARKERS
                         );
 
@@ -513,6 +606,13 @@ function buildPanel(thisObj) {
     tabEdit.alignChildren = ["fill", "fill"];
     tabEdit.spacing = 6;
     tabEdit.margins = 6;
+
+    // ── TAB 3: EXPORT SRT ────────────────────────────────────────────────
+    var tabExport = tabGroup.add("tab", undefined, "Export SRT");
+    tabExport.orientation = "column";
+    tabExport.alignChildren = ["fill", "fill"];
+    tabExport.spacing = 6;
+    tabExport.margins = 6;
 
     tabGroup.selection = tabGen;
 
@@ -710,6 +810,45 @@ function buildPanel(thisObj) {
     chkAutoAdjustComp.alignment = ["fill", "top"];
     chkAutoAdjustComp.helpTip = "Extend comp duration automatically if the last subtitle exceeds current comp duration.";
 
+    // ── Fit Out/In Dropdown ───────────────────────────────────────────────────
+    var grpFitRow = grpD.add("group");
+    grpFitRow.alignment = ["fill", "top"];
+    grpFitRow.orientation = "row";
+    grpFitRow.alignChildren = ["left", "center"];
+    grpFitRow.spacing = 6;
+    grpFitRow.margins = [4, 2, 4, 2];
+
+    grpFitRow.add("statictext", undefined, "Fit:");
+    var ddFit = grpFitRow.add("dropdownlist", undefined, ["(none)", "Fit Out", "Fit In"]);
+    ddFit.selection = 0;
+    ddFit.alignment = ["fill", "center"];
+    ddFit.helpTip = "Fit Out: extend subtitle end to next subtitle start (no gap).\n" +
+                    "Fit In:  extend subtitle start to prev subtitle end (no gap).\n" +
+                    "Cannot combine both — use dropdown to select one at a time.";
+
+    // ── Lead In / Lead Out ────────────────────────────────────────────────────
+    var grpLeadRow = grpD.add("group");
+    grpLeadRow.alignment = ["fill", "top"];
+    grpLeadRow.orientation = "row";
+    grpLeadRow.alignChildren = ["left", "center"];
+    grpLeadRow.spacing = 4;
+    grpLeadRow.margins = [4, 2, 4, 2];
+
+    grpLeadRow.add("statictext", undefined, "Lead In:");
+    var txtLeadIn = grpLeadRow.add("edittext", undefined, "0");
+    txtLeadIn.preferredSize = [38, 20];
+    txtLeadIn.helpTip = "Shift In point backwards by N frames/seconds to show subtitle earlier. Default: 0";
+
+    grpLeadRow.add("statictext", undefined, "Lead Out:");
+    var txtLeadOut = grpLeadRow.add("edittext", undefined, "0");
+    txtLeadOut.preferredSize = [38, 20];
+    txtLeadOut.helpTip = "Shift Out point forwards by N frames/seconds to keep subtitle longer. Default: 0";
+
+    var ddLeadUnit = grpLeadRow.add("dropdownlist", undefined, ["Frames", "Seconds"]);
+    ddLeadUnit.selection = 0;
+    ddLeadUnit.preferredSize = [75, 20];
+    ddLeadUnit.helpTip = "Unit for Lead In / Lead Out values.";
+
     // ── E. EXECUTION ──────────────────────────────────────────────────────────
     var grpE = tabGen.add("group");
     grpE.alignment = ["fill", "top"];
@@ -759,13 +898,13 @@ function buildPanel(thisObj) {
     var lstEdEntries = tabEdit.add("listbox", undefined, [], {
         numberOfColumns: 4,
         showHeaders: true,
-        columnTitles: ["#", "In Point", "Out Point", "Subtitle Text"],
-        columnWidths: [30, 85, 85, 140]
+        columnTitles: ["#", "In (HH:MM:SS:FF)", "Out (HH:MM:SS:FF)", "Subtitle Text"],
+        columnWidths: [30, 95, 95, 130]
     });
     lstEdEntries.alignment = ["fill", "fill"];
     lstEdEntries.preferredSize.height = 140;
 
-    // ── Detail Edit Baris Panel ───────────────────────────────────────────────
+    // ── Entry Detail Edit Panel ───────────────────────────────────────────────
     var grpEdDetail = tabEdit.add("panel", undefined, "SELECTED ENTRY DETAILS");
     grpEdDetail.alignment = ["fill", "top"];
     grpEdDetail.orientation = "column";
@@ -780,12 +919,14 @@ function buildPanel(thisObj) {
     grpEdTimes.spacing = 6;
 
     grpEdTimes.add("statictext", undefined, "In:");
-    var txtEdStart = grpEdTimes.add("edittext", undefined, "00:00:00,000");
+    var txtEdStart = grpEdTimes.add("edittext", undefined, "00:00:00:00");
     txtEdStart.preferredSize.width = 90;
+    txtEdStart.helpTip = "Format: HH:MM:SS:FF (frames). Also accepts HH:MM:SS,ms";
 
     grpEdTimes.add("statictext", undefined, "Out:");
-    var txtEdEnd = grpEdTimes.add("edittext", undefined, "00:00:00,000");
+    var txtEdEnd = grpEdTimes.add("edittext", undefined, "00:00:00:00");
     txtEdEnd.preferredSize.width = 90;
+    txtEdEnd.helpTip = "Format: HH:MM:SS:FF (frames). Also accepts HH:MM:SS,ms";
 
     var lblEdDur = grpEdTimes.add("statictext", undefined, "0.0s");
     lblEdDur.alignment = ["fill", "center"];
@@ -794,7 +935,7 @@ function buildPanel(thisObj) {
     txtEdContent.alignment = ["fill", "top"];
     txtEdContent.preferredSize.height = 45;
 
-    // ── Action Buttons Row (Paling Bawah) ─────────────────────────────────────
+    // ── Action Button Row ─────────────────────────────────────────────────────
     var grpEdActions = tabEdit.add("group");
     grpEdActions.alignment = ["fill", "bottom"];
     grpEdActions.orientation = "row";
@@ -812,10 +953,11 @@ function buildPanel(thisObj) {
     btnEdSave.alignment = ["fill", "center"];
     btnEdSave.preferredSize.height = 24;
 
-    /** Refresh isi ListBox dari array editorEntries */
+    /** Rebuild the ListBox from editorEntries, applying an optional text filter. */
     function refreshEditorList(filterText) {
         lstEdEntries.removeAll();
         var search = filterText ? filterText.toLowerCase() : "";
+        var fps = getFps();
 
         for (var i = 0; i < editorEntries.length; i++) {
             var item = editorEntries[i];
@@ -826,15 +968,19 @@ function buildPanel(thisObj) {
             }
 
             var row = lstEdEntries.add("item", (i + 1).toString());
-            row.subItems[0].text = TimeUtils.secondsToSrtTime(item.startSeconds);
-            row.subItems[1].text = TimeUtils.secondsToSrtTime(item.endSeconds);
+            row.subItems[0].text = TimeUtils.secondsToAETime(item.startSeconds, fps);
+            row.subItems[1].text = TimeUtils.secondsToAETime(item.endSeconds,   fps);
             row.subItems[2].text = txtSingle;
             row.entryIndex = i;
         }
         lblEdCount.text = "(" + editorEntries.length + " entries)";
     }
 
-    /** Load file SRT ke Tab Editor */
+    /**
+     * Load the selected SRT file into the Subtitle Editor tab.
+     * After parsing, attempts to match each entry to an AE text layer in the
+     * active composition by inPoint proximity, storing a layerRef for live edits.
+     */
     function loadSrtToEditor() {
         if (!state.srtFilePath || state.srtFilePath === "") {
             editorEntries = [];
@@ -845,20 +991,291 @@ function buildPanel(thisObj) {
         if (!fileObj.exists) { return; }
 
         var parseRes = SrtParser.parseSRT(fileObj);
-        if (parseRes.success) {
-            editorEntries = parseRes.entries;
-            refreshEditorList(txtEdSearch.text);
+        if (!parseRes.success) { return; }
+
+        editorEntries = parseRes.entries;
+
+        // ── Link entries to AE layers (by inPoint proximity) ────────────────
+        // Looks for text layers tagged with aesubmaster_generated comment.
+        // Tolerance: 1 frame at current FPS.
+        var comp = state.selectedComp;
+        if (comp) {
+            try {
+                var fps       = getFps();
+                var tolerance = 1.0 / fps; // 1 frame tolerance
+
+                // Collect generated text layers from comp
+                var genLayers = [];
+                for (var li = 1; li <= comp.numLayers; li++) {
+                    try {
+                        var lyr = comp.layer(li);
+                        if ((lyr instanceof TextLayer) && lyr.comment === "aesubmaster_generated") {
+                            genLayers.push(lyr);
+                        }
+                    } catch (ignore) {}
+                }
+
+                // Match each entry to the closest generated layer by inPoint
+                for (var ei = 0; ei < editorEntries.length; ei++) {
+                    var entry     = editorEntries[ei];
+                    entry.layerRef = null;
+                    var bestDiff  = tolerance + 1;
+
+                    for (var gi = 0; gi < genLayers.length; gi++) {
+                        try {
+                            var diff = Math.abs(genLayers[gi].inPoint - entry.startSeconds);
+                            // Valid match only if within tolerance
+                            if (diff <= tolerance && diff < bestDiff) {
+                                bestDiff       = diff;
+                                entry.layerRef = genLayers[gi];
+                            }
+                        } catch (ignore) {}
+                    }
+                }
+            } catch (linkErr) {
+                // Non-fatal — editor still works without live AE sync
+            }
         }
+
+        refreshEditorList(txtEdSearch.text);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // EVENT HANDLERS
+    // TAB 3: EXPORT SRT
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Dropdown comp berubah
+    // ── Header Info ────────────────────────────────────────────────────────────
+    var lblExpInfo = tabExport.add("statictext", undefined,
+        "Reads layers currently selected in the AE timeline. Select layers there, then click Refresh.",
+        { multiline: true });
+    lblExpInfo.alignment = ["fill", "top"];
+
+    // ── Comp info + Refresh button row ──────────────────────────────────────
+    var grpExpHeader = tabExport.add("group");
+    grpExpHeader.alignment = ["fill", "top"];
+    grpExpHeader.orientation = "row";
+    grpExpHeader.alignChildren = ["fill", "center"];
+    grpExpHeader.spacing = 6;
+    grpExpHeader.margins = [0, 2, 0, 2];
+
+    var lblExpComp = grpExpHeader.add("statictext", undefined, "Comp: (sync with Tab 1)");
+    lblExpComp.alignment = ["fill", "center"];
+
+    var btnExpRefresh = grpExpHeader.add("button", undefined, "↻ Refresh");
+    btnExpRefresh.preferredSize = [80, 22];
+    btnExpRefresh.helpTip = "Read currently selected layers from the AE timeline.";
+
+    // ── Preview ListBox (read-only, shows AE-selected text layers) ─────────────
+    var lstExpLayers = tabExport.add("listbox", undefined, [], {
+        numberOfColumns: 3,
+        showHeaders: true,
+        columnTitles: ["Layer Name", "In Point", "Out Point"],
+        columnWidths: [170, 85, 85]
+    });
+    lstExpLayers.alignment = ["fill", "fill"];
+    lstExpLayers.preferredSize.height = 180;
+    lstExpLayers.helpTip = "Preview of currently selected text layers in the AE timeline. Click Refresh to update.";
+
+    // ── Layer count info row ───────────────────────────────────────────────────
+    var grpExpSel = tabExport.add("group");
+    grpExpSel.alignment = ["fill", "top"];
+    grpExpSel.orientation = "row";
+    grpExpSel.alignChildren = ["fill", "center"];
+    grpExpSel.spacing = 6;
+    grpExpSel.margins = [0, 2, 0, 2];
+
+    var lblExpCount = grpExpSel.add("statictext", undefined, "(0 selected in timeline)");
+    lblExpCount.alignment = ["fill", "center"];
+
+    // ── Export button ────────────────────────────────────────────────────────────
+    var btnExpExport = tabExport.add("button", undefined, "Export Selected Layers as SRT...");
+    btnExpExport.alignment = ["fill", "top"];
+    btnExpExport.preferredSize.height = 28;
+    btnExpExport.enabled = false;
+    btnExpExport.helpTip = "Save selected text layers as a new .srt file sorted by In Point.";
+
+    // ── Status label ───────────────────────────────────────────────────────────────
+    var lblExpStatus = tabExport.add("statictext", undefined, "");
+    lblExpStatus.alignment = ["fill", "top"];
+
+    /**
+     * Populate lstExpLayers with text layers currently selected in the AE timeline.
+     * Reads layer.selected directly from the active composition.
+     */
+    function refreshExportLayerList() {
+        lstExpLayers.removeAll();
+        btnExpExport.enabled = false;
+        lblExpCount.text = "(0 selected in timeline)";
+        lblExpStatus.text = "";
+
+        var comp = state.selectedComp;
+        if (!comp) {
+            // Fallback: try to read from app.project.activeItem
+            try {
+                if (app.project && app.project.activeItem && app.project.activeItem instanceof CompItem) {
+                    comp = app.project.activeItem;
+                }
+            } catch (ignore) {}
+        }
+
+        if (!comp) {
+            lblExpStatus.text = "No composition selected. Pick one in the Generator tab.";
+            return;
+        }
+
+        var fps = getFps();
+        var selectedTextLayers = [];
+
+        // Collect only selected TEXT layers from the AE timeline.
+        // Use instanceof TextLayer — the most reliable type check in ExtendScript.
+        // Skips solids, nulls, shapes, footage, adjustment layers, etc.
+        try {
+            for (var li = 1; li <= comp.numLayers; li++) {
+                var lyr = comp.layer(li);
+                var isSelected = false;
+                var isText = false;
+                try { isSelected = lyr.selected; } catch (ignore) {}
+                try { isText = (lyr instanceof TextLayer); } catch (ignore) {}
+
+                if (isSelected && isText) {
+                    selectedTextLayers.push(lyr);
+                }
+            }
+        } catch (e) {
+            lblExpStatus.text = "Error reading layers: " + e.toString();
+            return;
+        }
+
+        if (selectedTextLayers.length === 0) {
+            lblExpStatus.text = "No text layers selected in the timeline. Select layers in AE, then Refresh.";
+            return;
+        }
+
+        // Sort by inPoint
+        selectedTextLayers.sort(function (a, b) {
+            var inA = 0, inB = 0;
+            try { inA = a.inPoint; } catch (ignore) {}
+            try { inB = b.inPoint; } catch (ignore) {}
+            return inA - inB;
+        });
+
+        for (var ri = 0; ri < selectedTextLayers.length; ri++) {
+            var lyr = selectedTextLayers[ri];
+            var inPt  = 0;
+            var outPt = 0;
+            try { inPt  = lyr.inPoint;  } catch (ignore) {}
+            try { outPt = lyr.outPoint; } catch (ignore) {}
+
+            var row = lstExpLayers.add("item", lyr.name);
+            row.subItems[0].text = TimeUtils.secondsToAETime(inPt,  fps);
+            row.subItems[1].text = TimeUtils.secondsToAETime(outPt, fps);
+            row.layerRef = lyr; // store layer reference for export
+        }
+
+        lblExpCount.text = "(" + selectedTextLayers.length + " selected in timeline)";
+        lblExpStatus.text = selectedTextLayers.length + " selected text layer(s) ready to export.";
+        btnExpExport.enabled = true;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TAB 3 EVENT HANDLERS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    lstExpLayers.onChange = function () {
+        // Preview-only listbox — no action needed on click
+    };
+
+    btnExpRefresh.onClick = function () {
+        refreshExportLayerList();
+    };
+
+    btnExpExport.onClick = function () {
+        try {
+            // Export all layers currently shown in the listbox
+            // (they represent the AE-timeline-selected text layers at last Refresh)
+            if (lstExpLayers.items.length === 0) {
+                alert("No layers to export. Select text layers in the AE timeline, then click Refresh.");
+                return;
+            }
+
+            var expEntries = [];
+            for (var ei = 0; ei < lstExpLayers.items.length; ei++) {
+                var item = lstExpLayers.items[ei];
+                var layerRef = item.layerRef;
+                if (!layerRef) { continue; }
+
+                var inPt  = 0;
+                var outPt = 0;
+                var txt   = "";
+
+                try { inPt  = layerRef.inPoint;  } catch (ignore) {}
+                try { outPt = layerRef.outPoint; } catch (ignore) {}
+
+                // Skip non-text layers that may have slipped through
+                try {
+                    if (!(layerRef instanceof TextLayer)) { continue; }
+                } catch (ignore) {}
+
+                // Read text from Source Text property
+                try {
+                    var srcText = layerRef.property("Source Text");
+                    if (srcText) {
+                        var tdVal = srcText.value;
+                        txt = tdVal.text || "";
+                    }
+                } catch (ignore) {}
+
+                if (outPt > inPt && txt.length > 0) {
+                    expEntries.push({
+                        index:        expEntries.length + 1,
+                        startSeconds: inPt,
+                        endSeconds:   outPt,
+                        text:         txt
+                    });
+                }
+            }
+
+            if (expEntries.length === 0) {
+                alert("No valid text layers found in selection (layers must have text and non-zero duration).");
+                return;
+            }
+
+            // Sort by start time
+            expEntries.sort(function (a, b) { return a.startSeconds - b.startSeconds; });
+
+            // Re-index sequentially
+            for (var ri = 0; ri < expEntries.length; ri++) {
+                expEntries[ri].index = ri + 1;
+            }
+
+            // Choose save path
+            var saveFile = File.saveDialog("Export as SRT", "SRT Files:*.srt");
+            if (!saveFile) { return; }
+
+            var savePath = saveFile.fsName;
+            if (!/\.srt$/i.test(savePath)) { savePath = savePath + ".srt"; }
+
+            var res = SrtWriter.writeSRT(savePath, expEntries);
+            if (res.success) {
+                lblExpStatus.text = "Exported " + expEntries.length + " entries to: " + new File(savePath).name;
+                alert("SRT exported successfully! (" + expEntries.length + " entries)");
+            } else {
+                lblExpStatus.text = "Export failed: " + res.error;
+                alert("Export failed: " + res.error);
+            }
+        } catch (e) {
+            alert("Export error: " + e.toString());
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TAB 2: SUBTITLE EDITOR EVENT HANDLERS (continued)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Comp dropdown change handler
     ddComp.onChange = function () { onCompSelected(); };
 
-    // Dropdown layer berubah
+    // Layer dropdown change handler
     ddLayer.onChange = function () { onLayerSelected(); };
 
     // Refresh comp
@@ -892,6 +1309,8 @@ function buildPanel(thisObj) {
     tabGroup.onChange = function () {
         if (tabGroup.selection === tabEdit) {
             loadSrtToEditor();
+        } else if (tabGroup.selection === tabExport) {
+            refreshExportLayerList();
         }
     };
 
@@ -909,56 +1328,104 @@ function buildPanel(thisObj) {
 
         edSelectedIndex = idx;
         var entry = editorEntries[idx];
+        var fps = getFps();
 
-        txtEdStart.text   = TimeUtils.secondsToSrtTime(entry.startSeconds);
-        txtEdEnd.text     = TimeUtils.secondsToSrtTime(entry.endSeconds);
+        txtEdStart.text   = TimeUtils.secondsToAETime(entry.startSeconds, fps);
+        txtEdEnd.text     = TimeUtils.secondsToAETime(entry.endSeconds,   fps);
         txtEdContent.text = entry.text;
 
         var dur = (entry.endSeconds - entry.startSeconds).toFixed(2);
         lblEdDur.text = dur + "s";
     };
 
-    // Live Auto-Update saat teks subtitle diketik
+    // Live update when subtitle text is typed
     txtEdContent.onChanging = function () {
         if (edSelectedIndex >= 0 && edSelectedIndex < editorEntries.length) {
             var entry = editorEntries[edSelectedIndex];
             entry.text = txtEdContent.text;
 
+            // Update listbox preview
             if (lstEdEntries.selection) {
                 var singleText = entry.text ? entry.text.replace(/\r/g, " ").replace(/\n/g, " ") : "";
                 lstEdEntries.selection.subItems[2].text = singleText;
             }
-        }
-    };
 
-    // Live Auto-Update saat waktu In diubah
-    txtEdStart.onChange = function () {
-        if (edSelectedIndex >= 0 && edSelectedIndex < editorEntries.length) {
-            var newStart = TimeUtils.srtTimeToSeconds(txtEdStart.text);
-            var entry = editorEntries[edSelectedIndex];
-            if (newStart >= 0 && newStart < entry.endSeconds) {
-                entry.startSeconds = newStart;
-                if (lstEdEntries.selection) {
-                    lstEdEntries.selection.subItems[0].text = TimeUtils.secondsToSrtTime(newStart);
-                }
-                var dur = (entry.endSeconds - entry.startSeconds).toFixed(2);
-                lblEdDur.text = dur + "s";
+            // Push text change to linked AE layer
+            if (entry.layerRef) {
+                try {
+                    var textProp = entry.layerRef.property("Source Text");
+                    var td = textProp.value;
+                    td.text = entry.text;
+                    textProp.setValue(td);
+
+                    // Update layer name to match the new text
+                    var safeName = entry.text.replace(/\r|\n/g, " ").substring(0, 35);
+                    if (entry.text.length > 35) {
+                        safeName += "...";
+                    }
+                    if (safeName && safeName.length > 0) {
+                        entry.layerRef.name = safeName;
+                    }
+                } catch (ignore) {}
             }
         }
     };
 
-    // Live Auto-Update saat waktu Out diubah
+    // Live update when In time is edited
+    txtEdStart.onChange = function () {
+        if (edSelectedIndex >= 0 && edSelectedIndex < editorEntries.length) {
+            var newStart = parseTimeInput(txtEdStart.text);
+            var entry = editorEntries[edSelectedIndex];
+            if (newStart >= 0 && newStart < entry.endSeconds) {
+                entry.startSeconds = newStart;
+                var fps = getFps();
+                if (lstEdEntries.selection) {
+                    lstEdEntries.selection.subItems[0].text = TimeUtils.secondsToAETime(newStart, fps);
+                }
+                txtEdStart.text = TimeUtils.secondsToAETime(newStart, fps);
+                var dur = (entry.endSeconds - entry.startSeconds).toFixed(2);
+                lblEdDur.text = dur + "s";
+
+                // Push timing change to linked AE layer
+                if (entry.layerRef) {
+                    try {
+                        app.beginUndoGroup("AESubMaster: Edit In Point");
+                        entry.layerRef.startTime = newStart;
+                        entry.layerRef.inPoint   = newStart;
+                        app.endUndoGroup();
+                    } catch (ignore) {
+                        try { app.endUndoGroup(); } catch (ignore2) {}
+                    }
+                }
+            }
+        }
+    };
+
+    // Live update when Out time is edited
     txtEdEnd.onChange = function () {
         if (edSelectedIndex >= 0 && edSelectedIndex < editorEntries.length) {
-            var newEnd = TimeUtils.srtTimeToSeconds(txtEdEnd.text);
+            var newEnd = parseTimeInput(txtEdEnd.text);
             var entry = editorEntries[edSelectedIndex];
             if (newEnd > entry.startSeconds) {
                 entry.endSeconds = newEnd;
+                var fps = getFps();
                 if (lstEdEntries.selection) {
-                    lstEdEntries.selection.subItems[1].text = TimeUtils.secondsToSrtTime(newEnd);
+                    lstEdEntries.selection.subItems[1].text = TimeUtils.secondsToAETime(newEnd, fps);
                 }
+                txtEdEnd.text = TimeUtils.secondsToAETime(newEnd, fps);
                 var dur = (entry.endSeconds - entry.startSeconds).toFixed(2);
                 lblEdDur.text = dur + "s";
+
+                // Push timing change to linked AE layer
+                if (entry.layerRef) {
+                    try {
+                        app.beginUndoGroup("AESubMaster: Edit Out Point");
+                        entry.layerRef.outPoint = newEnd;
+                        app.endUndoGroup();
+                    } catch (ignore) {
+                        try { app.endUndoGroup(); } catch (ignore2) {}
+                    }
+                }
             }
         }
     };
@@ -995,16 +1462,36 @@ function buildPanel(thisObj) {
         refreshEditorList(txtEdSearch.text);
     };
 
-    // Simpan SRT
+    // Save SRT to disk
     btnEdSave.onClick = function () {
         if (!state.srtFilePath || state.srtFilePath === "") {
             alert("Select an SRT file in the Generator tab first.");
             return;
         }
+
+        // ── Safety guard: prevent writing empty or all-blank data ──────────────
+        if (!editorEntries || editorEntries.length === 0) {
+            alert("Nothing to save — the subtitle list is empty.");
+            return;
+        }
+        var validCount = 0;
+        for (var vi = 0; vi < editorEntries.length; vi++) {
+            var e = editorEntries[vi];
+            if (e.text && e.text.replace(/\s/g, "").length > 0 &&
+                typeof e.startSeconds === "number" && typeof e.endSeconds === "number" &&
+                e.endSeconds > e.startSeconds) {
+                validCount++;
+            }
+        }
+        if (validCount === 0) {
+            alert("All entries are empty or have invalid timing. Save aborted.");
+            return;
+        }
+
         var res = SrtWriter.writeSRT(state.srtFilePath, editorEntries);
         if (res.success) {
             log("[SUCCESS] SRT file saved: " + new File(state.srtFilePath).name);
-            alert("SRT file saved successfully!");
+            alert("SRT file saved successfully! (" + validCount + " valid entries)");
         } else {
             alert("Failed to save SRT: " + res.error);
         }

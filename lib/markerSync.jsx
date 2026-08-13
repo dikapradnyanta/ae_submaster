@@ -1,37 +1,37 @@
 /**
  * AESubMaster — markerSync.jsx
- * 
- * Mendeteksi dan menggeser marker animasi Out di layer hasil duplikasi
- * secara proporsional terhadap durasi subtitle baru.
- * 
- * Kompatibel dengan ExtendScript (ES3).
+ *
+ * Detects and repositions the Out animation marker on a duplicated layer
+ * so it stays proportionally offset from the new outPoint.
+ *
+ * ExtendScript (ES3) compatible.
  */
 
 var MarkerSync = (function () {
 
-    // ─── Konstanta ────────────────────────────────────────────────────────────
+    // ─── Constants ────────────────────────────────────────────────────────────
 
     /**
-     * Daftar nama marker yang dikenali sebagai penanda animasi Out.
-     * Nama ini dicek terhadap properti MarkerValue.comment dari setiap marker.
-     * 
-     * DEVELOPER NOTE: Tambahkan nama marker baru di sini jika ada preset lain
-     * yang perlu didukung. Casing sensitif — sesuaikan dengan nama persis di preset.
-     * 
-     * Nama yang diketahui:
-     *   - "trOut"    → Motion Bro / Mr. Horse preset (paling umum)
-     *   - "outAnim"  → beberapa preset manual
-     *   - "OUT"      → preset custom uppercase
-     *   - "out"      → preset custom lowercase
-     *   - "animOut"  → variasi penulisan lain
+     * Known marker names that signal the start of an Out animation.
+     * Matched against MarkerValue.comment on each layer marker (case-sensitive).
+     *
+     * DEVELOPER NOTE: Add new names here to support additional preset libraries.
+     * Verify the exact casing used by your preset (open the layer in AE to inspect).
+     *
+     * Known mappings:
+     *   "trOut"   → Motion Bro / Mr. Horse (most common)
+     *   "outAnim" → some manual presets
+     *   "OUT"     → custom uppercase
+     *   "out"     → custom lowercase
+     *   "animOut" → alternative naming
      */
     var KNOWN_OUT_MARKERS = ["trOut", "outAnim", "OUT", "out", "animOut"];
 
-    // ─── Helper Internal ──────────────────────────────────────────────────────
+    // ─── Internal Helpers ─────────────────────────────────────────────────────
 
     /**
-     * Cek apakah sebuah string ada di dalam array (ES3 — tidak ada Array.indexOf).
-     * 
+     * Check if a value exists in an array (ES3 — no Array.indexOf).
+     *
      * @param  {Array}  arr
      * @param  {String} val
      * @return {Boolean}
@@ -44,11 +44,11 @@ var MarkerSync = (function () {
     }
 
     /**
-     * Ambil semua marker dari sebuah layer sebagai array of { time, value }.
-     * 
-     * @param  {Layer}  layer
-     * @return {Array}  Array of { time: Number, value: MarkerValue }
-     *                  Return [] jika layer tidak punya marker atau terjadi error.
+     * Retrieve all markers from a layer as { time, value } pairs.
+     *
+     * @param  {Layer} layer
+     * @return {Array} Array of { time: Number, value: MarkerValue }.
+     *                 Returns [] if the layer has no markers or an error occurs.
      */
     function getAllMarkers(layer) {
         var markers = [];
@@ -64,39 +64,39 @@ var MarkerSync = (function () {
                         value: markerProp.keyValue(i)
                     });
                 } catch (e) {
-                    // Marker tertentu gagal dibaca — lewati
+                    // Skip unreadable markers silently
                 }
             }
         } catch (e) {
-            // Layer tidak punya properti Marker — normal, return []
+            // Layer has no Marker property — normal, return []
         }
         return markers;
     }
 
-    // ─── Fungsi Utama ─────────────────────────────────────────────────────────
+    // ─── Main Function ────────────────────────────────────────────────────────
 
     /**
-     * Sinkronisasi marker animasi Out pada layer hasil duplikasi.
-     * 
-     * Logika:
-     *   1. Cari marker yang namanya ada di knownMarkerNames.
-     *   2. Hitung offset marker dari outPoint template (posisi dari akhir).
-     *   3. Geser marker ke posisi yang sama secara proporsional di outPoint baru.
-     * 
-     * Jika durasi subtitle baru lebih pendek dari jarak In+Out animasi di template:
-     *   → return { synced: false, conflict: true } — TIDAK ada perubahan otomatis.
-     * 
-     * @param  {Layer}   dupLayer          Layer hasil duplikasi yang akan dimodifikasi
-     * @param  {Number}  templateStartTime startTime template asli (detik)
-     * @param  {Number}  templateOutPoint  outPoint template asli (detik)
-     * @param  {Number}  newStartTime      startTime baru (= entry.startSeconds)
-     * @param  {Number}  newOutPoint       outPoint baru (= entry.endSeconds)
-     * @param  {Array}   knownMarkerNames  Array nama marker — gunakan KNOWN_OUT_MARKERS
+     * Synchronize the Out animation marker on a duplicated layer to the new outPoint.
+     *
+     * Logic:
+     *   1. Find the first marker whose comment matches a name in knownMarkerNames.
+     *   2. Calculate its fixed offset from the template's outPoint.
+     *   3. Apply the same offset from the new outPoint.
+     *
+     * If the new subtitle duration is shorter than the Out animation's duration:
+     *   → returns { synced: false, conflict: true } with no changes made.
+     *
+     * @param  {Layer}   dupLayer          Duplicated layer to modify
+     * @param  {Number}  templateStartTime Template's startTime (seconds)
+     * @param  {Number}  templateOutPoint  Template's outPoint (seconds)
+     * @param  {Number}  newStartTime      New layer's startTime (= entry.startSeconds)
+     * @param  {Number}  newOutPoint       New layer's outPoint (= entry.endSeconds)
+     * @param  {Array}   knownMarkerNames  Marker name list — use KNOWN_OUT_MARKERS
      * @return {Object}  {
-     *                     synced:   Boolean,   // true jika marker ditemukan & berhasil digeser
-     *                     conflict: Boolean,   // true jika durasi subtitle < jarak animasi
-     *                     markerName: String,  // nama marker yang ditemukan (jika synced)
-     *                     error:    String     // pesan error jika gagal
+     *                     synced:     Boolean,  // true if marker was found and repositioned
+     *                     conflict:   Boolean,  // true if subtitle duration < Out animation duration
+     *                     markerName: String,   // name of the matched marker
+     *                     error:      String    // error message if the move failed
      *                   }
      */
     function syncOutMarker(dupLayer, templateStartTime, templateOutPoint, newStartTime, newOutPoint, knownMarkerNames) {
@@ -109,14 +109,14 @@ var MarkerSync = (function () {
 
         var names = knownMarkerNames || KNOWN_OUT_MARKERS;
 
-        // ── Kumpulkan semua marker di layer ─────────────────────────────────
+        // ── Collect all markers on the layer ─────────────────────────────────
         var allMarkers = getAllMarkers(dupLayer);
         if (allMarkers.length === 0) {
-            // Tidak ada marker sama sekali — tidak ada yang perlu disinkronkan
+            // No markers at all — nothing to sync
             return result;
         }
 
-        // ── Cari marker Out yang dikenali ────────────────────────────────────
+        // ── Find the first recognized Out marker ─────────────────────────────
         var outMarker     = null;
         var outMarkerTime = -1;
 
@@ -129,73 +129,81 @@ var MarkerSync = (function () {
             }
 
             if (arrayContains(names, markerComment)) {
-                outMarker     = allMarkers[i];
-                outMarkerTime = allMarkers[i].time;
+                outMarker         = allMarkers[i];
+                outMarkerTime     = allMarkers[i].time;
                 result.markerName = markerComment;
                 break;
             }
         }
 
         if (outMarker === null) {
-            // Tidak ada marker yang dikenali — bukan error, cukup return unsynced
-            Logger.debug("markerSync", "No recognized out marker found on layer", { markersFound: allMarkers.length });
+            // No recognized Out marker — not an error, just nothing to sync
+            Logger.debug("markerSync", "No recognized Out marker found", { markersFound: allMarkers.length });
             return result;
         }
 
-        // ── Hitung durasi animasi ─────────────────────────────────────────────
-        var outDuration = templateOutPoint - outMarkerTime;
-        var templateDuration = templateOutPoint - templateStartTime;
-        var newDuration = newOutPoint - newStartTime;
+        // ── Calculate durations ───────────────────────────────────────────────
+        var outDuration = templateOutPoint - outMarkerTime;  // length of Out animation
+        var newDuration = newOutPoint - newStartTime;        // total length of new subtitle
 
-        // ── Deteksi konflik durasi ───────────────────────────────────────────
+        // ── Conflict check: subtitle too short for Out animation ──────────────
         if (newDuration < outDuration - 0.001) {
             result.conflict = true;
             Logger.warn("markerSync", "Duration conflict for marker '" + result.markerName + "'", {
-                newDuration: newDuration,
+                newDuration:             newDuration,
                 requiredOutAnimDuration: outDuration
             });
-            // TIDAK mengubah marker — kembalikan tanpa modifikasi
+            // Do NOT modify the marker — return as-is
             return result;
         }
 
-        // ── Hitung posisi marker baru ────────────────────────────────────────
+        // ── Calculate new marker position ─────────────────────────────────────
+        // Place the marker exactly 'outDuration' seconds before the new outPoint
+        // so the Out animation finishes precisely at the subtitle's end.
         var newMarkerTime = newOutPoint - outDuration;
+
+        // Guard: marker must not precede the layer's inPoint
         if (newMarkerTime < newStartTime) {
             newMarkerTime = newStartTime;
         }
 
-        // ── Geser marker ke posisi baru ──────────────────────────────────────
+        // Guard: marker must not land on or after outPoint
+        if (newMarkerTime >= newOutPoint) {
+            newMarkerTime = newOutPoint - (1.0 / 25.0); // at least 1 frame before outPoint
+        }
+
+        // ── Move the marker ───────────────────────────────────────────────────
         try {
             var markerProp = dupLayer.property("Marker");
 
-            // Tambah marker baru di posisi baru dengan value yang sama
+            // Place the marker at its new position with the same value
             markerProp.setValueAtTime(newMarkerTime, outMarker.value);
 
-            // Hapus marker lama di posisi lama (jika posisinya berbeda)
+            // Remove the old marker only if the position actually changed
             if (Math.abs(outMarkerTime - newMarkerTime) > 0.0001) {
                 markerProp.removeKey(markerProp.nearestKeyIndex(outMarkerTime));
             }
 
             result.synced = true;
-            Logger.debug("markerSync", "Marker '" + result.markerName + "' moved successfully", {
+            Logger.debug("markerSync", "Marker '" + result.markerName + "' repositioned", {
                 oldTime: outMarkerTime,
                 newTime: newMarkerTime
             });
         } catch (e) {
-            result.error = "Gagal menggeser marker \"" + result.markerName + "\": " + e.toString();
-            Logger.error("markerSync", "Failed moving marker '" + result.markerName + "'", e);
+            result.error = "Failed to move marker \"" + result.markerName + "\": " + e.toString();
+            Logger.error("markerSync", "Failed to move marker '" + result.markerName + "'", e);
         }
 
         return result;
     }
 
     /**
-     * Deteksi overlap waktu antar entry subtitle.
-     * Dipakai oleh panel.jsx untuk mengisi log area setelah generate.
-     * 
+     * Detect time overlaps between consecutive subtitle entries.
+     * Used by panel.jsx to populate the log area after generation.
+     *
      * @param  {Array}  entries   Array of { index, startSeconds, endSeconds, text }
      * @return {Array}            Array of { indexA, indexB, description }
-     *                            (pasangan entry yang saling overlap)
+     *                            (each item represents one overlapping pair)
      */
     function detectOverlaps(entries) {
         var overlaps = [];
@@ -205,7 +213,7 @@ var MarkerSync = (function () {
             var a = entries[i];
             var b = entries[i + 1];
 
-            // Overlap: b.startSeconds < a.endSeconds
+            // Overlap condition: next entry starts before current one ends
             if (b.startSeconds < a.endSeconds - 0.001) {
                 overlaps.push({
                     indexA:      a.index,

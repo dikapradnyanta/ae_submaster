@@ -1,163 +1,186 @@
-# AESubMaster — SRT Subtitle Importer untuk After Effects
+# AESubMaster — SRT Subtitle Importer for After Effects
 
-Plugin ScriptUI (.jsx) untuk After Effects yang mengimpor file subtitle `.srt` sebagai text layer, menggunakan **duplikasi template layer** agar animasi preset pihak ketiga (Mr. Horse, Motion Bro, dll) terbawa otomatis.
+A ScriptUI (.jsx) plugin for After Effects that imports `.srt` subtitle files as text layers using **template layer duplication**. This approach ensures that third-party animation presets (such as Mr. Horse, Motion Bro, etc.) and text styling are automatically carried over to all generated subtitles.
 
 ---
 
-## Cara Install
+## Installation
 
-1. **Salin seluruh folder `AESubMaster/`** (beserta subfolder `lib/`, `ui/`, dan `docs/`) ke salah satu lokasi berikut:
+1. **Copy the entire `AESubMaster/` folder** (including the `lib/`, `ui/`, and `docs/` subdirectories) to one of the following locations:
 
    **Windows:**
    ```
-   C:\Program Files\Adobe\Adobe After Effects <versi>\Support Files\Scripts\ScriptUI Panels\AESubMaster\
+   C:\Program Files\Adobe\Adobe After Effects <version>\Support Files\Scripts\ScriptUI Panels\AESubMaster\
    ```
-   *Atau versi per-user (tidak perlu admin):*
+   *Or for per-user installation (no admin rights required):*
    ```
-   C:\Users\<nama_user>\AppData\Roaming\Adobe\After Effects\<versi>\Scripts\ScriptUI Panels\AESubMaster\
+   C:\Users\<username>\AppData\Roaming\Adobe\After Effects\<version>\Scripts\ScriptUI Panels\AESubMaster\
    ```
 
    **macOS:**
    ```
-   /Applications/Adobe After Effects <versi>/Scripts/ScriptUI Panels/AESubMaster/
+   /Applications/Adobe After Effects <version>/Scripts/ScriptUI Panels/AESubMaster/
    ```
 
-   > ⚠️ **Penting:** Yang perlu dikopi adalah **seluruh folder `AESubMaster/`**, bukan hanya file `AESubMaster.jsx`-nya saja. Modul `lib/` dan `ui/` harus ada di dalam folder yang sama.
+   > ⚠️ **Important:** You must copy the **entire `AESubMaster/` folder**, not just the `AESubMaster.jsx` file. The `lib/` and `ui/` modules must reside within the same directory.
 
 2. **Restart After Effects.**
 
-3. Buka dari menu **Window > AESubMaster**. Panel bisa di-dock seperti panel bawaan AE.
+3. Open the plugin via the menu: **Window > AESubMaster**. The panel is dockable just like native AE panels.
 
 ---
 
-## Cara Pakai
+## How to Use
 
-### Alur Kerja Normal
+### Standard Workflow
 
-1. **Siapkan Template Layer**
-   - Buka composition yang ingin diberi subtitle.
-   - Buat/desain **satu text layer** sebagai template: isi teks contoh, tambahkan animasi In/Out dari preset (misal Mr. Horse), atur posisi, ukuran, font sesuai keinginan.
+1. **Prepare the Template Layer**
+   - Open the composition where you want to place the subtitles.
+   - Create or design **one single text layer** as your template: insert placeholder text, apply your desired In/Out animations from a preset (e.g., Mr. Horse), and adjust the position, size, and font to your preference.
 
-2. **Buka Panel**
-   - Menu **Window > AESubMaster**.
-   - Pilih composition dari dropdown **Comp** (default: comp yang aktif).
+2. **Open the Panel**
+   - Go to **Window > AESubMaster**.
+   - Select your composition from the **Comp** dropdown (it defaults to the currently active composition).
 
-3. **Pilih Template Layer**
-   - Pilih layer template dari dropdown **Layer**.
-   - Klik **↻** di sebelah dropdown jika layer baru tidak muncul.
+3. **Select the Template Layer**
+   - Choose your prepared template layer from the **Layer** dropdown.
+   - Click the **↻** button next to the dropdown if your newly created layer does not appear.
 
-4. **Pilih File SRT**
-   - Klik **Browse...** → pilih file `.srt`.
+4. **Select the SRT File**
+   - Click **Browse...** and select your `.srt` file.
 
-5. **Atur Opsi**
-   - ✅ **Sync Marker Out** — geser marker animasi Out (misal `trOut`) agar sinkron dengan timing setiap subtitle. *Direkomendasikan aktif jika pakai preset seperti Mr. Horse.*
-   - ✅ **Auto-Adjust Comp Length** — panjangkan durasi comp otomatis jika subtitle terakhir melebihi durasi comp saat ini.
+5. **Configure Options**
+   - ✅ **Sync Marker Out** — Shifts the Out animation marker (e.g., `trOut`) to synchronize with each subtitle's timing. *Highly recommended if you are using presets like Mr. Horse.*
+   - ✅ **Auto-Adjust Comp Length** — Automatically extends the composition's duration if the final subtitle ends after the current composition duration.
 
 6. **Generate**
-   - Klik **▶ Generate Subtitles**.
-   - Plugin akan menduplikasi template untuk setiap entry SRT, menyesuaikan teks dan timing.
-   - Layer template asli otomatis disembunyikan (visibility off).
-   - Hasil dan peringatan tampil di area log.
+   - Click **▶ Generate Subtitles**.
+   - The plugin will duplicate the template for every SRT entry, injecting the exact text and timing.
+   - The original template layer will be automatically hidden (visibility turned off).
+   - Results and warnings will be displayed in the log area.
 
-7. **Cek Log**
-   - `✔ N layer berhasil dibuat` — sukses.
-   - `⚠ Overlap waktu: #X, #Y` — subtitle yang waktunya tumpang tindih, perlu disesuaikan manual di timeline.
-   - `⚠ Durasi subtitle < animasi Out: #Z` — subtitle terlalu pendek untuk animasi Out selesai — perlu dicek manual.
+7. **Review the Log**
+   - `✔ N layers successfully created` — Generation successful.
+   - `⚠ Time overlap detected: #X, #Y` — Subtitles have overlapping timings and require manual adjustment in the timeline.
+   - `⚠ Subtitle duration < Out animation: #Z` — The subtitle is too short for the Out animation to finish playing — manual review is needed.
 
 8. **Undo**
-   - Satu kali **Ctrl+Z** membatalkan seluruh proses generate (satu undo group).
+   - Pressing **Ctrl+Z** once will undo the entire generation process (it runs as a single undo group).
 
 ---
 
 ### Re-import / Update SRT
 
-Jika file SRT direvisi dan perlu diperbarui:
+If you revise your SRT file and need to update the composition:
 
-1. Pastikan template layer & file SRT sudah dipilih.
-2. Klik **↺ Re-import / Replace**.
-3. Plugin akan **menghapus semua layer hasil generate sebelumnya** (dikenali dari tag internal), lalu generate ulang dari file SRT baru.
-4. Layer lain milik user yang tidak terkait tidak akan tersentuh.
-
----
-
-### Simpan / Load Template (.ffx)
-
-Untuk menggunakan template yang sama di project atau mesin AE lain:
-
-- **Save as .ffx** — export style + animasi template layer ke file `.ffx` portable.
-- **Load .ffx** — import file `.ffx` tersimpan sebagai template baru di comp aktif.
-- **Quick Load** — muat ulang file `.ffx` terakhir yang dipakai (jalan bahkan setelah AE restart).
+1. Ensure your template layer and the new SRT file are selected.
+2. Click **↺ Re-import / Replace**.
+3. The plugin will **remove all previously generated layers** (identified by an internal tag) and then regenerate them from the new SRT file.
+4. Other unrelated user layers in the composition will remain untouched.
 
 ---
 
-## Marker yang Dikenali untuk "Sync Marker Out"
+### Tab 2: Subtitle Editor (Live Sync)
 
-Plugin mendeteksi marker animasi Out berdasarkan **nama/comment marker** berikut:
+If you need to revise text or timing *after* the subtitles have been generated:
 
-| Nama Marker | Preset / Sumber |
+1. Switch to the **Subtitle Editor** tab.
+2. The plugin will load the list of subtitles from your currently active SRT file.
+3. Click any row, then edit the text or timing (In/Out) in the detail fields below.
+4. **Live Sync:** Changes to the text and timing will *instantly* update the corresponding generated text layer in the After Effects timeline! (The layer name will also automatically adjust).
+5. Click **Save SRT** to write your changes back to the physical SRT file (this includes a *safety guard* to prevent accidental saving of empty data).
+
+---
+
+### Tab 3: Export SRT
+
+If you have text layers in your timeline (whether generated by this plugin or created manually) and wish to export them as an SRT file:
+
+1. Select the text layers you want to export directly in the After Effects timeline.
+2. Switch to the **Export SRT** tab. The panel will automatically list your selected text layers (click the ↻ Refresh button if they do not appear).
+3. Specify the **Save Path** (where the `.srt` file will be saved).
+4. Click **Export to SRT**. The selected layers will be sorted chronologically by their In Point and saved in the standard SRT format.
+
+---
+
+### Save / Load Template (.ffx)
+
+To reuse a template in another project or on a different AE workstation:
+
+- **Save as .ffx** — Exports the style and animation of the template layer to a portable `.ffx` file.
+- **Load .ffx** — Imports a saved `.ffx` file as a new template layer in the active composition.
+- **Quick Load** — Instantly loads the last used `.ffx` file (persists even after restarting AE).
+
+---
+
+## Recognized Markers for "Sync Marker Out"
+
+The plugin detects Out animation markers based on the following **marker names/comments**:
+
+| Marker Name | Preset / Source |
 |-------------|----------------|
-| `trOut`     | Mr. Horse / Motion Bro (paling umum) |
-| `outAnim`   | Preset manual |
-| `OUT`       | Preset custom uppercase |
-| `out`       | Preset custom lowercase |
-| `animOut`   | Variasi lain |
+| `trOut`     | Mr. Horse / Motion Bro (most common) |
+| `outAnim`   | Manual presets |
+| `OUT`       | Custom uppercase preset |
+| `out`       | Custom lowercase preset |
+| `animOut`   | Alternative variation |
 
-Jika preset yang kamu pakai menggunakan nama marker lain, buka file `lib/markerSync.jsx` dan tambahkan nama marker ke array `KNOWN_OUT_MARKERS`.
+If your preset uses a different marker name, open `lib/markerSync.jsx` and add the name to the `KNOWN_OUT_MARKERS` array.
 
 ---
 
-## Limitasi (yang Tidak Bisa Ditangani Otomatis)
+## Limitations (Cannot Be Handled Automatically)
 
-1. **Rich text (multi-style dalam satu layer):** Jika template punya 2 warna/ukuran berbeda dalam satu text layer, hanya gaya karakter pertama yang terbawa ke semua subtitle. Variasi gaya dalam satu baris tidak bisa dipertahankan otomatis.
+1. **Rich text (multi-style within a single layer):** If a template contains multiple colors or sizes in one layer, only the styling of the first character is carried over to the generated subtitles. In-line style variations cannot be preserved automatically.
 
-2. **Data internal preset di luar marker/expression standar:** Jika preset menyimpan parameter di luar marker atau expression AE standar (data binari khusus), plugin tidak bisa membaca/mengubahnya.
+2. **Internal preset data outside standard properties:** If a preset stores custom binary data outside standard AE markers or expressions, the plugin cannot read or modify it.
 
-3. **Auto-wrap teks panjang (Point Text):** Jika template adalah *Point Text* (bukan *Paragraph/Box Text*), teks SRT yang panjang bisa meluber keluar frame. **Solusi: gunakan Paragraph Text (Box Text) untuk template.**
+3. **Auto-wrapping long text (Point Text):** If the template is built using *Point Text* rather than *Paragraph/Box Text*, lengthy SRT lines may overflow outside the composition frame. **Solution: Always use Paragraph Text (Box Text) for your template.**
 
-4. **Skala besar (ratusan–ribuan baris):** Jumlah layer yang sangat banyak bisa membuat AE berjalan lambat atau tidak responsif. Tidak ada auto-precompose di versi ini — ini catatan risiko yang perlu dipantau.
+4. **Large scale limits (hundreds to thousands of lines):** Generating a massive number of layers may cause AE to lag or become unresponsive. There is no auto-precompose feature in this version — monitor performance accordingly.
 
-5. **Overlap & konflik durasi:** Plugin tidak mengubah timing secara otomatis — hanya mencatat di log. Penyesuaian manual di timeline tetap diperlukan untuk kasus ini.
+5. **Overlaps & duration conflicts:** The plugin does not automatically alter timing to fix overlaps — it only logs the conflict. Manual adjustments in the timeline are required for these edge cases.
 
 ---
 
 ## Troubleshooting
 
-| Masalah | Solusi |
+| Issue | Solution |
 |---------|--------|
-| Panel tidak muncul di menu Window | Pastikan folder `AESubMaster/` (bukan hanya `AESubMaster.jsx`) ada di folder `ScriptUI Panels`. Restart AE. |
-| Dropdown layer kosong | Pastikan comp terpilih sudah punya text layer. Klik ↻ untuk refresh. |
-| Tombol Generate tidak aktif | Pilih template layer DAN file SRT dulu. |
-| Marker Out tidak tergeser | Cek nama marker di preset kamu, tambahkan ke `KNOWN_OUT_MARKERS` di `lib/markerSync.jsx` jika belum ada. |
-| Error "saveAsAnimationPreset is not a function" | Fitur ini butuh versi AE yang mendukung `layer.saveAsAnimationPreset()`. Coba update AE ke versi lebih baru. |
-| Teks SRT tidak muncul/terpotong | Gunakan Paragraph Text (Box Text) untuk template layer, bukan Point Text. |
-| Error tidak diketahui / terjadi crash | Klik tombol **Debug Log 📄** di panel untuk membuka file `debug.log` di text editor, atau cek konsol ExtendScript. |
+| Panel does not appear in Window menu | Ensure the entire `AESubMaster/` folder (not just the .jsx file) is in the `ScriptUI Panels` folder. Restart AE. |
+| Layer dropdown is empty | Ensure the selected composition contains at least one text layer. Click ↻ to refresh. |
+| Generate button is disabled | You must select both a template layer AND an SRT file first. |
+| Out Marker does not shift | Verify the marker name in your preset and add it to `KNOWN_OUT_MARKERS` in `lib/markerSync.jsx` if missing. |
+| Error "saveAsAnimationPreset is not a function" | This feature requires an AE version that supports `layer.saveAsAnimationPreset()`. Update AE to a newer version. |
+| SRT text is cut off or missing | Use Paragraph Text (Box Text) for your template layer, not Point Text. |
+| Unknown error or crash | Click the **Open Log** button in the panel to view the detailed diagnostic log, or check the ExtendScript console. |
 
 ---
 
-## Log & Diagnostik Error
+## Logging & Diagnostics
 
-Plugin dilengkapi dengan sistem logging diagnostik otomatis:
-- **UI Log:** Menampilkan pesan status & peringatan ringkas secara real-time di bagian bawah panel.
-- **Debug Log File:** Menyimpan log terperinci di `<userData>/AESubMaster/debug.log` (termasuk timestamp, nama modul, level error, dan stack trace exception jika ada).
-- Klik tombol **Debug Log 📄** di samping label *Status:* untuk langsung membuka file log tersebut di text editor OS.
+The plugin features an automated diagnostic logging system:
+- **UI Log:** Displays real-time status and warnings directly at the bottom of the panel.
+- **Debug Log File:** Logs detailed technical information to `<userData>/AESubMaster/debug.log` (including timestamps, module names, error levels, and exception stack traces).
+- Click the **Open Log** button in the UI to open this file in your OS default text editor.
 
 ---
 
-## Struktur File
+## File Structure
 
 ```
 AESubMaster/
-├── AESubMaster.jsx      ← Entry point (ini yang dikopi ke ScriptUI Panels)
+├── AESubMaster.jsx      ← Entry point (copied into ScriptUI Panels)
 ├── lib/
-│   ├── logger.jsx       ← Sistem logging diagnostik & penulisan file debug.log
-│   ├── timeUtils.jsx    ← Konversi timecode SRT ↔ detik
-│   ├── srtParser.jsx    ← Parser file .srt
-│   ├── layerDuplicator.jsx  ← Duplikasi layer + injeksi teks
-│   ├── markerSync.jsx   ← Sync marker animasi Out
-│   ├── presetIO.jsx     ← Export/import .ffx
-│   └── prefs.jsx        ← Preferensi plugin
+│   ├── timeUtils.jsx    ← Converts SRT timecodes ↔ seconds
+│   ├── srtParser.jsx    ← Parses .srt files
+│   ├── layerDuplicator.jsx  ← Duplicates layers and injects text
+│   ├── markerSync.jsx   ← Synchronizes Out animation markers
+│   ├── presetIO.jsx     ← Exports/imports .ffx presets
+│   └── prefs.jsx        ← Manages plugin preferences
+│   └── srtWriter.jsx    ← Serializes subtitle data to SRT format
 ├── ui/
-│   └── panel.jsx        ← UI ScriptUI panel
+│   └── panel.jsx        ← ScriptUI panel logic and UI definition
 └── docs/
     ├── Brief_Plugin_SRT_Importer_AE.md
     └── design.md
